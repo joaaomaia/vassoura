@@ -1,3 +1,63 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [
+    "setuptools>=64",
+    "wheel",
+]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "vassoura"
+version = "0.1.0"
+description = "Ferramentas para análise e limpeza de correlação e multicolinearidade em DataFrames."
+authors = [
+    { name = "Seu Nome", email = "you@example.com" },
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.25",
+    "seaborn>=0.13",
+    "matplotlib>=3.8",
+    "scipy>=1.11",
+    "statsmodels>=0.14",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "coverage",
+    "pre-commit",
+    "black",
+    "isort",
+]
+
+docs = [
+    "mkdocs-material",
+]
+
+[tool.setuptools.package-data]
+"vassoura" = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vassoura*"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
