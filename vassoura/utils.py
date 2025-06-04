@@ -1,4 +1,5 @@
- """Vassoura — Utilities
+from __future__ import annotations
+"""Vassoura — Utilities
 ======================
 
 Este módulo concentra funções auxiliares utilizadas em todo o pacote
@@ -20,7 +21,6 @@ algo como::
     import logging, vassoura
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 """
-from __future__ import annotations
 
 import logging
 import warnings
