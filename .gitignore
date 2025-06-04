@@ -1,0 +1,57 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testes e relatórios de cobertura
+htmlcov/
+.tox/
+.coverage
+.cache/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Notebooks temporários
+*.ipynb_checkpoints
+
+# Ambientes virtuais
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Docs (build local)
+site/
+docs/_build/
+
+# Relatórios gerados
+vassoura_report.html
+*.png
+*.svg
+*.pdf
+
+# Dados temporários
+*.log
+*.tmp
+*.bak
+
+# Ignore notebook de saída se necessário
+examples/*.out.ipynb
