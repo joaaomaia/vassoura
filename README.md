@@ -2,7 +2,7 @@
 
 *Limpeza de correlação & multicolinearidade para DataFrames em Python*
 
-![logo](docs/_static/vassoura_banner.png)
+![logo](imgs/social_preview_github.png)
 
 > **Vassoura** ajuda a *varrer* variáveis redundantes do seu dataset. Ele
 > detecta correlações fortes, calcula VIF, gera heat‑maps automáticos e

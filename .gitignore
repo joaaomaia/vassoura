@@ -44,9 +44,15 @@ docs/_build/
 
 # Relatórios gerados
 vassoura_report.html
-*.png
 *.svg
 *.pdf
+
+# Ignora todos os arquivos .png
+*.png
+
+# Exceto o banner específico
+!imgs/social_preview_github.png
+
 
 # Dados temporários
 *.log
