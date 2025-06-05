@@ -37,20 +37,58 @@ def _select_var_to_drop(
     corr_df: pd.DataFrame,
     pair: Tuple[str, str],
     keep_cols: List[str],
+    *,
+    metric: str = "median",           # "mean", "median", "max"
+    weight_keep: float = 1.5,       # pondera correlação com keep_cols
 ) -> str:
-    """Heurística para decidir qual variável descartar de um par."""
+    """Decide qual variável descartar em um par altamente correlacionado.
+
+    Parameters
+    ----------
+    corr_df : pd.DataFrame
+        Matriz de correlação (index e colunas = variáveis).
+    pair : tuple(str, str)
+        Par de variáveis correlacionadas (var1, var2).
+    keep_cols : list[str]
+        Lista de colunas prioritárias a serem preservadas.
+    metric : str, optional
+        Estatística usada na decisão: "mean", "median" ou "max".
+    weight_keep : float, optional
+        Fator multiplicativo aplicado às correlações contra colunas prioritárias.
+
+    Returns
+    -------
+    str
+        Nome da variável escolhida para remoção.
+        Retorna "" caso ambas pertençam a keep_cols.
+    """
     var1, var2 = pair
-    # Preserva explicitamente keep_cols
+
+    # 1) Prioridade absoluta às colunas protegidas
     if var1 in keep_cols and var2 in keep_cols:
-        return ""  # não pode remover nenhum
+        return ""                   # não remove nenhuma
     if var1 in keep_cols:
         return var2
     if var2 in keep_cols:
         return var1
-    # Caso comum: remove variável com maior correlação média absoluta
-    mean1 = corr_df[var1].abs().mean()
-    mean2 = corr_df[var2].abs().mean()
-    return var1 if mean1 >= mean2 else var2
+
+    # 2) Define função de pontuação
+    def _score(var: str) -> float:
+        others = corr_df.columns.difference([var1, var2])
+        vals = corr_df.loc[others, var].abs()
+
+        # Pondera correlação com keep_cols
+        if keep_cols:
+            mask_keep = vals.index.isin(keep_cols)
+            vals = vals.where(~mask_keep, vals * weight_keep)
+
+        if metric == "median":
+            return vals.median()
+        if metric == "max":
+            return vals.max()
+        return vals.mean()
+
+    return var1 if _score(var1) >= _score(var2) else var2
 
 # ---------------------------------------------------------------------------
 # API pública
