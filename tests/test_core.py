@@ -60,12 +60,12 @@ def test_compute_vif():
     assert vif["vif"].max() > 5
 
 # ---------------------------------------------------------------------------
-# clean_multicollinearity
+# clean
 # ---------------------------------------------------------------------------
 
-def test_clean_multicollinearity():
+def test_clean():
     df = _make_dummy_df()
-    df_clean, dropped, _, _ = vs.clean_multicollinearity(
+    df_clean, dropped, _, _ = vs.clean(
         df,
         target_col="target",
         keep_cols=["x1"],

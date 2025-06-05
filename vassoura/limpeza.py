@@ -24,7 +24,7 @@ from .utils import search_dtypes, suggest_corr_method
 from .vif import remove_high_vif, compute_vif
 
 __all__ = [
-    "clean_multicollinearity",
+    "clean",
 ]
 
 LOGGER = logging.getLogger("vassoura")
@@ -56,7 +56,7 @@ def _select_var_to_drop(
 # API pública
 # ---------------------------------------------------------------------------
 
-def clean_multicollinearity(
+def clean(
     df: pd.DataFrame,
     *,
     target_col: str | None = None,
