@@ -41,6 +41,7 @@ Thumbs.db
 # Docs (build local)
 site/
 docs/_build/
+imgs/olds/
 
 # Relatórios gerados
 vassoura_report.html
