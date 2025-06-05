@@ -1,6 +1,6 @@
 # Vassoura
 
-*Limpeza de correlação & multicolinearidade para DataFrames em Python*
+*Limpeza de correlação & multicolinearidade para DataFrames Pandas*
 
 ![logo](imgs/social_preview_github.png)
 
