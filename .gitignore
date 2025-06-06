@@ -54,7 +54,7 @@ vassoura_report.html
 *.psd
 
 # Exceto o banner específico
-!imgs/social_preview_github.png
+!vassoura/imgs/social_preview_github.png
 
 
 # Dados temporários
