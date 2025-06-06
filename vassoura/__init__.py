@@ -10,6 +10,7 @@ from .limpeza import clean
 from .relatorio import generate_report
 from .autocorrelacao import compute_panel_acf, plot_panel_acf
 from .analisador import analisar_autocorrelacao
+from .core import Vassoura
 
 __all__ = [
     "search_dtypes",
@@ -24,5 +25,6 @@ __all__ = [
     "generate_report",
     "compute_panel_acf",
     "plot_panel_acf",
-    "analisar_autocorrelacao"
+    "analisar_autocorrelacao",
+    "Vassoura"
 ]
