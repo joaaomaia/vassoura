@@ -191,9 +191,10 @@ vs.generate_report(
 
 1. **Fork** do repositório
 2. **Clone** local e crie branch: `git checkout -b minha-feature`
-3. **Desenvolva** código seguindo PEP 8 e padrões de commit (conventional commits).
-4. **Teste** com `pytest -q` e `flake8`.
-5. **Abra** Pull Request detalhando alterações.
+3. Instale as dependências de desenvolvimento: `pip install -e .[dev]`
+4. **Desenvolva** código seguindo PEP 8 e padrões de commit (conventional commits).
+5. **Teste** com `pytest -q` e `flake8`.
+6. **Abra** Pull Request detalhando alterações.
 
 Recomendações:
 
