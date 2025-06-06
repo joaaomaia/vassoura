@@ -63,7 +63,7 @@ def compute_panel_acf(
         mensais.
     min_periods : int
         Comprimento mínimo de histórico para considerar o contrato.
-    agg : {"mean", "median", "weighted"}
+    agg_method : {"mean", "median", "weighted"}
         Como agregar a ACF entre contratos. "weighted" usa o inverso do
         comprimento da série como peso.
 
@@ -78,6 +78,7 @@ def compute_panel_acf(
 
     # Containers
     lag_vals: Dict[int, List[float]] = {lag: [] for lag in range(1, nlags + 1)}
+    lag_wts: Dict[int, List[float]] = {lag: [] for lag in range(1, nlags + 1)}
 
     # Loop por contrato
     for cid, grp in df_sorted.groupby(id_col, sort=False):
@@ -94,8 +95,10 @@ def compute_panel_acf(
 
         # Calcula ACF até nlags (statsmodels devolve lag0 … nlags)
         acf_vals = acf(series.fillna(series.mean()), nlags=nlags, fft=True)
+        w = 1 / len(series) if len(series) else 0
         for lag in range(1, nlags + 1):
             lag_vals[lag].append(acf_vals[lag])
+            lag_wts[lag].append(w)
 
     # Agrega
     rows = []
@@ -105,8 +108,7 @@ def compute_panel_acf(
         if agg_method  == "median":
             agg_val = float(np.median(values))
         elif agg_method  == "weighted":
-            # peso = 1/len(series); já é parecido pois cada list entry vem de serie >= min_periods
-            weights = [1 / len(v) if not isinstance(v, list) else 1 for v in values]
+            weights = lag_wts[lag]
             agg_val = float(np.average(values, weights=weights))
         else:
             agg_val = float(np.mean(values))
