@@ -102,9 +102,9 @@ def compute_panel_acf(
     for lag, values in lag_vals.items():
         if not values:
             continue
-        if agg_method  == "median":
+        if agg_method == "median":
             agg_val = float(np.median(values))
-        elif agg_method  == "weighted":
+        elif agg_method == "weighted":
             # peso = 1/len(series); já é parecido pois cada list entry vem de serie >= min_periods
             weights = [1 / len(v) if not isinstance(v, list) else 1 for v in values]
             agg_val = float(np.average(values, weights=weights))
