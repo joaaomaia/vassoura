@@ -98,7 +98,7 @@ def generate_report(
     df : pandas.DataFrame
         DataFrame original.
     output_path : str | Path
-        Caminho onde gramhar o arquivo de saída.
+        Caminho onde gravar o arquivo de saída.
     target_col : str | None
         Nome da coluna target. Será excluída das análises se include_target=False.
     corr_method : {"auto", "pearson", "spearman", "cramer"}
