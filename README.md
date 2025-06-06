@@ -2,7 +2,7 @@
 
 *Limpeza de correlação, multicolinearidade e autocorrelação para pandas DataFrames*
 
-![logo](imgs/social_preview_github.png)
+![logo](vassoura/imgs/social_preview_github.png)
 
 > **Vassoura** ajuda a **varrer** variáveis redundantes e dependências temporais do seu dataset. Ele detecta correlações fortes, calcula VIF, analisa autocorrelação em painel, gera heat‑maps e plots de VIF, e produz relatórios HTML/Markdown prontos para anexar em documentos técnicos.
 
