@@ -180,7 +180,15 @@ def graph_cut(
     G.add_nodes_from(corr.columns)
     G.add_edges_from(edges)
 
-    cover = nx.algorithms.approximation.min_vertex_cover(G)
+    # ``min_vertex_cover`` was removed in newer NetworkX versions (>=3.0).
+    # ``min_weighted_vertex_cover`` is the replacement.  For compatibility with
+    # older versions we try ``min_vertex_cover`` first and fall back to the
+    # weighted variant if needed.
+    approx = nx.algorithms.approximation
+    if hasattr(approx, "min_vertex_cover"):
+        cover = approx.min_vertex_cover(G)
+    else:
+        cover = approx.min_weighted_vertex_cover(G)
     removed = [v for v in cover if v not in keep_cols]
 
     return {
