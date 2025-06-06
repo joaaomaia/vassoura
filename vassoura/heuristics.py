@@ -12,7 +12,7 @@ Cada heurística deve seguir a *assinatura*:
 
 **NOTA**
 -----
-O módulo não conhece `VassouraSession`. Ele deve ser *stateless* e puro.
+O módulo não conhece `Vassoura`. Ele deve ser *stateless* e puro.
 A sessão garantirá cacheamento.
 """
 from __future__ import annotations

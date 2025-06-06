@@ -60,7 +60,7 @@ def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> floa
 DEFAULT_HEURISTICS = ["corr", "vif"]
 
 
-class VassouraSession:
+class Vassoura:
     """Stateful cleaning session – **one object, one dataset**.
 
     Usabilidade simples: basta instanciar com DataFrame e colunas-chave,
