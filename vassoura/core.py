@@ -83,6 +83,8 @@ class VassouraSession:
         `'corr'`, `'vif'`, `'iv'`, `'importance'`, `'graph_cut'`.
     thresholds : dict[str, float] | None
         Dicionário de limites por heurística, ex: `{'corr':0.9, 'vif':10, 'iv':0.02}`.
+    engine : {"pandas", "dask", "polars"}
+        Backend utilizado nos cálculos pesados. ``"pandas"`` é o padrão.
     verbose : bool
         Se `True`, imprime progresso no console.
     """
@@ -95,12 +97,14 @@ class VassouraSession:
         keep_cols: Optional[List[str]] = None,
         heuristics: Optional[List[str]] = None,
         thresholds: Optional[Dict[str, float]] = None,
+        engine: str = "pandas",
         verbose: bool = True,
     ) -> None:
         self.df_original = df.copy()
         self.df_current = df.copy()
         self.target_col = target_col
         self.keep_cols = set(keep_cols or [])
+        self.engine = engine
         self.verbose = verbose
 
         self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
@@ -180,6 +184,7 @@ class VassouraSession:
                 method="auto",
                 target_col=self.target_col,
                 include_target=False,
+                engine=self.engine,
                 verbose=self.verbose,
             )
         mask = (self._corr_matrix.abs() > thr) & (~np.eye(len(self._corr_matrix), dtype=bool))
@@ -209,6 +214,7 @@ class VassouraSession:
                     self.df_current,
                     target_col=self.target_col,
                     include_target=False,
+                    engine=self.engine,
                     verbose=self.verbose,
                 )
             except Exception:
@@ -241,7 +247,26 @@ class VassouraSession:
             self._drop(low_iv, reason=f"iv<{thr}")
 
     def _apply_importance(self) -> None:
-        warnings.warn("Importance heuristic placeholder – não implementada.")
+        if self.target_col is None:
+            warnings.warn("Importance heuristic skipped: target_col not provided.")
+            return
+
+        thr = self.thresholds.get("importance", 0.2)
+        if self.verbose:
+            print(f"[Vassoura] Importance heuristic (drop_lowest={thr})")
+
+        from .heuristics import importance
+
+        result = importance(
+            self.df_current,
+            target_col=self.target_col,
+            keep_cols=list(self.keep_cols),
+            drop_lowest=thr,
+        )
+
+        removed = result.get("removed", [])
+        if removed:
+            self._drop(removed, reason=f"importance<{thr}")
 
     def _apply_graph_cut(self) -> None:
         """
