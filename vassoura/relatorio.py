@@ -85,6 +85,8 @@ def generate_report(
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
     max_vif_iter: int = 20,
+    n_steps: int | None = None,
+    vif_n_steps: int = 1,
     heatmap_labels: bool = True,
     heatmap_base_size: float = 0.6,
     verbose: bool = True,
@@ -113,6 +115,10 @@ def generate_report(
         Parâmetros para `search_dtypes`.
     max_vif_iter : int
         Número máximo de iterações no filtro de VIF.
+    n_steps : int | None
+        Passos fracionados para remoção por correlação.
+    vif_n_steps : int
+        Passos fracionados para remoção por VIF.
     heatmap_labels : bool
         Se True, exibe anotações numéricas (valores) no heatmap; caso False, anotações são omitidas.
     heatmap_base_size : float
@@ -205,6 +211,8 @@ def generate_report(
         remove_ids=remove_ids,
         id_patterns=id_patterns,
         max_vif_iter=max_vif_iter,
+        n_steps=n_steps,
+        vif_n_steps=vif_n_steps,
         verbose=verbose,
     )
 

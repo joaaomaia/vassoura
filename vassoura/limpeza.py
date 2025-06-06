@@ -14,6 +14,7 @@ colunas descartadas, matriz de correlação final e VIF das variáveis
 remanescentes.
 """
 import logging
+import math
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -108,6 +109,8 @@ def clean(
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
     max_vif_iter: int = 20,
+    n_steps: int | None = None,
+    vif_n_steps: int = 1,
     verbose: bool = True,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame, pd.DataFrame]:
     """Executa limpeza de multicolinearidade via correlação + VIF.
@@ -133,6 +136,11 @@ def clean(
         Encaminhados para ``search_dtypes``.
     max_vif_iter : int
         Máximo de iterações do filtro VIF.
+    n_steps : int | None
+        Quantidade de etapas fracionadas para remoção por correlação.
+        ``None`` mantém o comportamento tradicional (remoção completa).
+    vif_n_steps : int
+        Número de etapas para remoção por VIF. Por padrão ``1``.
     verbose : bool
         Controla *logs*.
 
@@ -154,7 +162,68 @@ def clean(
     # 1) Remoção por correlação
     # ---------------------------------------------------------------------
     if corr_threshold and corr_threshold > 0:
-        corr_matrix = compute_corr_matrix(
+        iteration = 0
+        while True:
+            corr_matrix = compute_corr_matrix(
+                df_work,
+                method=corr_method,
+                target_col=target_col,
+                include_target=include_target,
+                limite_categorico=limite_categorico,
+                force_categorical=force_categorical,
+                remove_ids=remove_ids,
+                id_patterns=id_patterns,
+                verbose=verbose,
+            )
+            upper_tri = corr_matrix.where(np.triu(np.ones_like(corr_matrix, dtype=bool), k=1))
+            pairs = upper_tri.stack().loc[lambda s: s.abs() > corr_threshold]
+
+            if iteration == 0:
+                if verbose:
+                    LOGGER.info(
+                        "Encontrados %d pares com |corr| > %.2f",
+                        len(pairs),
+                        corr_threshold,
+                    )
+            else:
+                if verbose:
+                    LOGGER.info(
+                        "Recontagem: %d pares acima do limiar",
+                        len(pairs),
+                    )
+
+            if pairs.empty:
+                break
+
+            step_limit = len(pairs) if n_steps is None else math.ceil(len(pairs) / n_steps)
+            removed_this_iter: List[str] = []
+            for (var1, var2), corr_val in pairs.sort_values(key=lambda s: s.abs(), ascending=False).items():
+                if var1 not in df_work.columns or var2 not in df_work.columns:
+                    continue
+                drop_var = _select_var_to_drop(corr_matrix, (var1, var2), list(keep_cols))
+                if drop_var and drop_var in df_work.columns and drop_var not in keep_cols:
+                    df_work = df_work.drop(columns=[drop_var])
+                    dropped_overall.append(drop_var)
+                    removed_this_iter.append(drop_var)
+                    if verbose:
+                        LOGGER.info(
+                            "Iteração %d: removendo '%s' devido a |corr|=%.3f com '%s'",
+                            iteration + 1,
+                            drop_var,
+                            abs(corr_val),
+                            var1 if drop_var == var2 else var2,
+                        )
+                    if len(removed_this_iter) >= step_limit:
+                        break
+            if verbose:
+                LOGGER.info(
+                    "Iteração %d: %d variáveis removidas",
+                    iteration + 1,
+                    len(removed_this_iter),
+                )
+            iteration += 1
+
+        corr_matrix_final = compute_corr_matrix(
             df_work,
             method=corr_method,
             target_col=target_col,
@@ -165,23 +234,6 @@ def clean(
             id_patterns=id_patterns,
             verbose=verbose,
         )
-        # Procurar pares com correlação alta
-        upper_tri = corr_matrix.where(np.triu(np.ones_like(corr_matrix, dtype=bool), k=1))
-        pairs = upper_tri.stack().loc[lambda s: s.abs() > corr_threshold]
-
-        if verbose:
-            LOGGER.info("Encontrados %d pares com |corr| > %.2f", len(pairs), corr_threshold)
-        for (var1, var2), corr_val in pairs.sort_values(key=lambda s: s.abs(), ascending=False).items():
-            if var1 not in df_work.columns or var2 not in df_work.columns:
-                continue  # uma delas já foi removida
-            drop_var = _select_var_to_drop(corr_matrix, (var1, var2), list(keep_cols))
-            if drop_var and drop_var in df_work.columns and drop_var not in keep_cols:
-                df_work = df_work.drop(columns=[drop_var])
-                dropped_overall.append(drop_var)
-                if verbose:
-                    LOGGER.info("Removendo '%s' devido a |corr|=%.3f com '%s'", drop_var, abs(corr_val), var1 if drop_var == var2 else var2)
-        # Corr matriz pós remoções
-        corr_matrix_final = df_work[corr_matrix.columns.intersection(df_work.columns)].corr(method=suggest_corr_method(*search_dtypes(df_work, target_col=None, limite_categorico=limite_categorico, force_categorical=force_categorical, remove_ids=remove_ids, id_patterns=id_patterns, verbose=False)))
     else:
         corr_matrix_final = pd.DataFrame()
 
@@ -196,6 +248,7 @@ def clean(
             include_target=include_target,
             keep_cols=list(keep_cols),
             max_iter=max_vif_iter,
+            vif_n_steps=vif_n_steps,
             limite_categorico=limite_categorico,
             force_categorical=force_categorical,
             remove_ids=remove_ids,

@@ -76,3 +76,27 @@ def test_clean():
     # 'x2' deve ser removida (alta correlação com x1) mas x1 deve permanecer
     assert "x2" in dropped
     assert "x1" in df_clean.columns
+
+
+def test_clean_fractional_steps():
+    df = _make_dummy_df()
+    df1, dropped1, _, _ = vs.clean(
+        df,
+        target_col="target",
+        keep_cols=["x1"],
+        corr_threshold=0.9,
+        vif_threshold=5,
+        verbose=False,
+    )
+    df2, dropped2, _, _ = vs.clean(
+        df,
+        target_col="target",
+        keep_cols=["x1"],
+        corr_threshold=0.9,
+        vif_threshold=5,
+        n_steps=2,
+        vif_n_steps=2,
+        verbose=False,
+    )
+    assert df1.equals(df2)
+    assert set(dropped1) == set(dropped2)

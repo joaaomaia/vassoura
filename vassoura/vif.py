@@ -8,6 +8,7 @@ preservar e opção de incluir o *target* no *DataFrame* analisado.
 """
 
 import logging
+import math
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -148,6 +149,7 @@ def remove_high_vif(
     include_target: bool = False,
     keep_cols: Optional[List[str]] = None,
     max_iter: int = 20,
+    vif_n_steps: int = 1,
     limite_categorico: int = 50,
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
@@ -158,6 +160,8 @@ def remove_high_vif(
     """Remove iterativamente variáveis com VIF acima do limiar.
 
     Mantém intactas quaisquer colunas listadas em ``keep_cols``.
+    A remoção pode ser fracionada em ``vif_n_steps`` etapas, recomputando
+    o VIF a cada rodada.
 
     Returns
     -------
@@ -174,6 +178,9 @@ def remove_high_vif(
     df_iter = df.copy()
     dropped: List[str] = []
 
+    if vif_n_steps < 1:
+        raise ValueError("vif_n_steps deve ser >= 1")
+
     for iteration in range(max_iter):
         vif_df = compute_vif(
             df_iter,
@@ -187,18 +194,40 @@ def remove_high_vif(
             verbose=verbose,
         )
 
-        # Encontra maior VIF acima do limiar (ignorando forças)
         vif_high = vif_df[(vif_df["vif"] > vif_threshold) & (~vif_df["variable"].isin(keep_cols))]
         if vif_high.empty:
             if verbose:
-                LOGGER.info("Iteração %d: nenhum VIF > %.2f restante", iteration + 1, vif_threshold)
+                LOGGER.info(
+                    "Iteração %d: nenhum VIF > %.2f restante",
+                    iteration + 1,
+                    vif_threshold,
+                )
             break
-        # Remove variável com maior VIF
-        worst_var = vif_high.iloc[0, 0]
-        df_iter = df_iter.drop(columns=[worst_var])
-        dropped.append(worst_var)
+
+        if verbose and iteration == 0:
+            LOGGER.info(
+                "%d variáveis acima do limiar inicial de VIF",
+                len(vif_high),
+            )
+
+        step_limit = math.ceil(len(vif_high) / vif_n_steps)
+        removed_this_iter = 0
+        for _, row in vif_high.sort_values("vif", ascending=False).iterrows():
+            var = row["variable"]
+            df_iter = df_iter.drop(columns=[var])
+            dropped.append(var)
+            removed_this_iter += 1
+            if verbose:
+                LOGGER.info(
+                    "Iteração %d: removendo '%s' (VIF=%.2f)",
+                    iteration + 1,
+                    var,
+                    row["vif"],
+                )
+            if removed_this_iter >= step_limit:
+                break
         if verbose:
-            LOGGER.info("Iteração %d: removendo '%s' (VIF=%.2f)", iteration + 1, worst_var, vif_high.iloc[0, 1])
+            LOGGER.info("Iteração %d: %d variáveis removidas", iteration + 1, removed_this_iter)
     else:
         LOGGER.warning("Número máximo de iterações (%d) atingido", max_iter)
 
