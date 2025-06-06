@@ -1,4 +1,9 @@
-from .utils import search_dtypes, suggest_corr_method, figsize_from_matrix
+from .utils import (
+    search_dtypes,
+    suggest_corr_method,
+    figsize_from_matrix,
+    criar_dataset_pd_behavior,
+)
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
 from .vif import compute_vif, remove_high_vif
 from .limpeza import clean
@@ -10,6 +15,7 @@ __all__ = [
     "search_dtypes",
     "suggest_corr_method",
     "figsize_from_matrix",
+    "criar_dataset_pd_behavior",
     "compute_corr_matrix",
     "plot_corr_heatmap",
     "compute_vif",

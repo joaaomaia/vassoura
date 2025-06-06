@@ -33,6 +33,7 @@ __all__ = [
     "search_dtypes",
     "suggest_corr_method",
     "figsize_from_matrix",
+    "criar_dataset_pd_behavior",
 ]
 
 # ---------------------------------------------------------------------------
@@ -200,3 +201,74 @@ def figsize_from_matrix(n_features: int, base: float = 0.4, *, min_size: int = 6
     """
     size = np.clip(int(n_features * base), min_size, max_size)
     return size, size
+
+
+def criar_dataset_pd_behavior(
+    n_clientes: int = 1000,
+    max_anos: int = 5,
+    n_features: int = 20,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Gera dataset sintético para modelagem de PD *behavior*.
+
+    Os contratos começam em meses aleatórios entre 2018-01 e 2022-12 e
+    possuem durações distintas. Cada linha representa um mês de histórico
+    de um contrato.
+
+    Parameters
+    ----------
+    n_clientes : int
+        Quantidade de contratos (IDs) distintos.
+    max_anos : int
+        Duração máxima possível em anos para cada contrato.
+    n_features : int
+        Número de colunas preditoras geradas.
+    seed : int
+        Semente para reprodutibilidade.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame contendo ``NroContrato``, ``AnoMesReferencia``, features e
+        coluna ``ever90m12`` simulada.
+    """
+
+    rng = np.random.default_rng(seed)
+    start_dates = pd.date_range("2018-01-01", "2022-12-01", freq="MS")
+
+    rows = []
+    for i in range(n_clientes):
+        start = rng.choice(start_dates)
+        dur = rng.integers(12, max_anos * 12 + 1)
+        meses = pd.date_range(start, periods=dur, freq="MS")
+        df_cli = pd.DataFrame({
+            "NroContrato": i + 1,
+            "AnoMesReferencia": meses.strftime("%Y%m").astype(int),
+        })
+        rows.append(df_cli)
+
+    df = pd.concat(rows, ignore_index=True)
+
+    time_num = (df["AnoMesReferencia"] // 100) * 12 + (df["AnoMesReferencia"] % 100) - 1
+
+    for j in range(1, n_features + 1):
+        base = rng.normal(0, 1, size=n_clientes)
+        amplitude = rng.uniform(0.5, 1.5)
+        phase = rng.uniform(0, 2 * np.pi)
+        noise = rng.normal(0, 0.5, size=len(df))
+        df[f"feature_{j:02d}"] = (
+            base[df["NroContrato"] - 1]
+            + amplitude * np.sin(time_num / 6 + phase)
+            + noise
+        )
+
+    logits = (
+        0.3 * df["feature_01"]
+        + 0.2 * df["feature_02"]
+        - 0.4 * df["feature_03"]
+        + rng.normal(0, 1, size=len(df))
+    )
+    probs = 1 / (1 + np.exp(-logits))
+    df["ever90m12"] = (probs > 0.8).astype(int)
+
+    return df
