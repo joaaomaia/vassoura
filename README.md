@@ -15,7 +15,7 @@
 * **Classificar tipos de colunas** (*numéricas*, *categóricas*, *IDs*);
 * **Calcular correlação** (Pearson, Spearman, Cramér‑V) e visualizar via heat‑map dinamicamente dimensionado;
 * **Calcular VIF** (Variance Inflation Factor) usando `statsmodels` ou NumPy, e remover variáveis iterativamente conforme limiar;
-* **Limpar multicolinearidade** combinando filtro por correlação e VIF em um único pipeline (`clean_multicollinearity`);
+* **Limpar multicolinearidade** combinando filtro por correlação e VIF em um único pipeline (`clean`);
 * **Analisar autocorrelação em painel** para séries temporais por contrato, agregando ACF (ACF médio, mediana, ponderado) e exibindo correlogramas;
 * **Gerar relatórios** HTML ou Markdown completos com seções de conceitos, heat‑maps, plots de VIF e autocorrelação, além de listas de variáveis removidas.
 
@@ -60,7 +60,7 @@ vassoura/                  # Código‑fonte
 ├── utils.py               # Funções utilitárias (search_dtypes, suggest_corr_method, figsize)
 ├── correlacao.py          # compute_corr_matrix, plot_corr_heatmap
 ├── vif.py                 # compute_vif, remove_high_vif
-├── limpeza.py             # clean_multicollinearity
+├── limpeza.py             # clean
 ├── relatorio.py           # generate_report
 ├── autocorrelacao.py      # compute_panel_acf, plot_panel_acf
 └── analisador.py          # analisar_autocorrelacao
@@ -100,7 +100,7 @@ pyproject.toml             # Configuração do projeto
 * **Suporte opcional a Dask/Polars** passando `engine="dask"` ou `engine="polars"`.
 * Heurísticas extras: `importance` (XGBoost/SHAP) e `graph_cut` para correlações complexas.
 
-### 4. Limpeza Combinada (`clean_multicollinearity`)
+### 4. Limpeza Combinada (`clean`)
 
 * Pipeline de 2 passos:  **(a)** filtro por correlação (`corr_threshold`) → remove pares com |corr|>limiar.
   **(b)** filtro por VIF (`vif_threshold`) → remove iterativamente usando VIF.
@@ -147,7 +147,7 @@ df = pd.read_csv("dados.csv")
 df = vs.criar_dataset_pd_behavior(n_clientes=1000, anos=3)
 
 # 2. Pipeline de limpeza de multicolinearidade
-df_limpo, removidas, corr_final, vif_final = vs.clean_multicollinearity(
+df_limpo, removidas, corr_final, vif_final = vs.clean(
     df,
     target_col="ever90m12",
     keep_cols=["idade", "renda"],
