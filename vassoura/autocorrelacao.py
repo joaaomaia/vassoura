@@ -11,7 +11,7 @@ Ferramentas para calcular autocorrelação (ACF) em datasets de séries
 Funções públicas
 ----------------
 * ``compute_panel_acf`` – ACF por contrato agregada (média, mediana ou
-  ponderada pelo inverso do comprimento)
+  ponderada pelo comprimento da série)
 * ``plot_panel_acf``   – gráfico de barras horizontais com rótulos de
   valor (duas casas decimais)
 """
@@ -34,12 +34,15 @@ def _make_period_index(s: pd.Series) -> pd.PeriodIndex:
     try:
         return pd.PeriodIndex(s.astype(str).str[:6], freq="M")
     except Exception as err:
-        raise ValueError("time_col precisa estar no formato YYYYMM (e.g. 202403)") from err
+        raise ValueError(
+            "time_col precisa estar no formato YYYYMM (e.g. 202403)"
+        ) from err
 
 
 # ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
+
 
 def compute_panel_acf(
     df: pd.DataFrame,
@@ -49,9 +52,8 @@ def compute_panel_acf(
     nlags: int = 12,
     min_periods: int = 12,
     agg_method: str = "mean",  # ← esse precisa estar aqui
-    verbose: bool = False
+    verbose: bool = False,
 ) -> pd.DataFrame:
-    
     """Calcula ACF por contrato e agrega.
 
     Parâmetros
@@ -64,8 +66,9 @@ def compute_panel_acf(
     min_periods : int
         Comprimento mínimo de histórico para considerar o contrato.
     agg_method : {"mean", "median", "weighted"}
-        Como agregar a ACF entre contratos. "weighted" usa o inverso do
-        comprimento da série como peso.
+        Como agregar a ACF entre contratos. Quando ``weighted`` as médias
+        são ponderadas pelo comprimento da série (número de observações
+        após o reindex) de cada contrato.
 
     Retorna
     -------
@@ -95,7 +98,8 @@ def compute_panel_acf(
 
         # Calcula ACF até nlags (statsmodels devolve lag0 … nlags)
         acf_vals = acf(series.fillna(series.mean()), nlags=nlags, fft=True)
-        w = 1 / len(series) if len(series) else 0
+        # Peso proporcional ao número de observações do contrato
+        w = float(series.count())
         for lag in range(1, nlags + 1):
             lag_vals[lag].append(acf_vals[lag])
             lag_wts[lag].append(w)
@@ -105,9 +109,9 @@ def compute_panel_acf(
     for lag, values in lag_vals.items():
         if not values:
             continue
-        if agg_method  == "median":
+        if agg_method == "median":
             agg_val = float(np.median(values))
-        elif agg_method  == "weighted":
+        elif agg_method == "weighted":
             weights = lag_wts[lag]
             agg_val = float(np.average(values, weights=weights))
         else:
@@ -116,7 +120,9 @@ def compute_panel_acf(
 
     result = pd.DataFrame(rows).sort_values("lag").reset_index(drop=True)
     if result.empty:
-        LOGGER.warning("Nenhum contrato com histórico >= %d meses para calcular ACF", min_periods)
+        LOGGER.warning(
+            "Nenhum contrato com histórico >= %d meses para calcular ACF", min_periods
+        )
     return result
 
 
@@ -145,7 +151,9 @@ def plot_panel_acf(
 
     # Labels
     for i, row in panel_acf.iterrows():
-        ax.text(row["acf"] + 0.02 * np.sign(row["acf"]), i, f"{row['acf']:.2f}", va="center")
+        ax.text(
+            row["acf"] + 0.02 * np.sign(row["acf"]), i, f"{row['acf']:.2f}", va="center"
+        )
 
     ax.set_xlabel("Autocorrelação agregada")
     ax.set_ylabel("Lag (meses)")
