@@ -65,6 +65,7 @@ def compute_vif(
     *,
     target_col: str | None = None,
     include_target: bool = False,
+    engine: str = "pandas",
     limite_categorico: int = 50,
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
@@ -83,6 +84,8 @@ def compute_vif(
         Considera a coluna *target* no cálculo de VIF.
     limite_categorico, force_categorical, remove_ids, id_patterns
         Encaminhados para ``search_dtypes``.
+    engine : {"pandas", "dask", "polars"}
+        Backend utilizado para acelerar o cálculo quando disponível.
     verbose : bool
         Exibe *logs*.
 
@@ -109,7 +112,20 @@ decrescentemente.
     if not num_cols:
         raise ValueError("Nenhuma coluna numérica identificada para cálculo de VIF")
 
-    X = df_work[num_cols].astype(float).values
+    if engine == "dask":
+        try:
+            import dask.dataframe as dd
+        except ImportError as exc:
+            raise ImportError("engine='dask' requer dask instalado") from exc
+        X = dd.from_pandas(df_work[num_cols].astype(float), npartitions=4).to_dask_array(lengths=True).compute()
+    elif engine == "polars":
+        try:
+            import polars as pl
+        except ImportError as exc:
+            raise ImportError("engine='polars' requer polars instalado") from exc
+        X = pl.from_pandas(df_work[num_cols].astype(float)).to_numpy()
+    else:
+        X = df_work[num_cols].astype(float).values
 
     if variance_inflation_factor is not None:
         vif_vals = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
@@ -136,6 +152,7 @@ def remove_high_vif(
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
+    engine: str = "pandas",
     verbose: bool = True,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame]:
     """Remove iterativamente variáveis com VIF acima do limiar.
@@ -150,6 +167,8 @@ def remove_high_vif(
         Colunas removidas.
     final_vif : pandas.DataFrame
         VIF das variáveis remanescentes.
+    engine : {"pandas", "dask", "polars"}
+        Backend a ser utilizado nas chamadas de ``compute_vif``.
     """
     keep_cols = keep_cols or []
     df_iter = df.copy()
@@ -160,6 +179,7 @@ def remove_high_vif(
             df_iter,
             target_col=target_col,
             include_target=include_target,
+            engine=engine,
             limite_categorico=limite_categorico,
             force_categorical=force_categorical,
             remove_ids=remove_ids,
@@ -186,6 +206,7 @@ def remove_high_vif(
         df_iter,
         target_col=target_col,
         include_target=include_target,
+        engine=engine,
         limite_categorico=limite_categorico,
         force_categorical=force_categorical,
         remove_ids=remove_ids,

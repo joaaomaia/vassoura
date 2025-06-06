@@ -91,11 +91,14 @@ pyproject.toml             # Configuração do projeto
 
 * **Métodos**: `pearson`, `spearman`, `cramer`, ou `auto` (decide com base nos tipos).
 * Gera **DataFrame** de correlação e **heat‑map** Seaborn com dimensionamento automático (anotações opcionais).
+* Pode utilizar `engine="dask"` ou `engine="polars"` para grandes DataFrames.
 
 ### 3. VIF (`compute_vif`, `remove_high_vif`)
 
 * Calcula **Variance Inflation Factor** para variáveis numéricas. Usa `statsmodels` se disponível, ou *fallback* NumPy.
 * Remove iterativamente variáveis que excedem o limiar `vif_threshold`, preservando colunas-chave (`keep_cols`).
+* **Suporte opcional a Dask/Polars** passando `engine="dask"` ou `engine="polars"`.
+* Heurísticas extras: `importance` (XGBoost/SHAP) e `graph_cut` para correlações complexas.
 
 ### 4. Limpeza Combinada (`clean_multicollinearity`)
 

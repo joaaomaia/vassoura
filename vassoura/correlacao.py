@@ -77,6 +77,7 @@ def compute_corr_matrix(
     method: str = "auto",
     target_col: str | None = None,
     include_target: bool = False,
+    engine: str = "pandas",
     limite_categorico: int = 50,
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
@@ -98,6 +99,8 @@ def compute_corr_matrix(
         Inclui a coluna *target* na matriz de correlação.
     limite_categorico, force_categorical, remove_ids, id_patterns, verbose
         Encaminhados para ``search_dtypes``.
+    engine : {"pandas", "dask", "polars"}
+        Backend a ser utilizado quando possível.
 
     Returns
     -------
@@ -129,9 +132,27 @@ def compute_corr_matrix(
         if not num_cols:
             raise ValueError("Não há colunas numéricas para calcular correlação %s" % method)
         data = df_work[num_cols].copy()
-        corr = data.corr(method=method)
+        if engine == "dask":
+            try:
+                import dask.dataframe as dd
+            except ImportError as exc:
+                raise ImportError("engine='dask' requer dask instalado") from exc
+            data_dd = dd.from_pandas(data, npartitions=4)
+            corr = data_dd.corr(method=method).compute()
+        elif engine == "polars":
+            try:
+                import polars as pl
+            except ImportError as exc:
+                raise ImportError("engine='polars' requer polars instalado") from exc
+            corr = pl.from_pandas(data).corr(method=method).to_pandas()
+        else:
+            corr = data.corr(method=method)
         if verbose:
-            LOGGER.info("Matriz de correlação %s calculada para %d variáveis numéricas", method, len(num_cols))
+            LOGGER.info(
+                "Matriz de correlação %s calculada para %d variáveis numéricas",
+                method,
+                len(num_cols),
+            )
         return corr
 
     if method == "cramer":
