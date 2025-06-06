@@ -63,9 +63,9 @@ def compute_panel_acf(
         mensais.
     min_periods : int
         Comprimento mínimo de histórico para considerar o contrato.
-    agg : {"mean", "median", "weighted"}
-        Como agregar a ACF entre contratos. "weighted" usa o inverso do
-        comprimento da série como peso.
+    agg_method : {"mean", "median", "weighted"}
+        Método de agregação da ACF entre contratos. "weighted" usa o inverso
+        do comprimento da série como peso.
 
     Retorna
     -------
