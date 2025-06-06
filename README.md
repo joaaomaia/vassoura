@@ -108,7 +108,8 @@ pyproject.toml             # Configuração do projeto
 
 * Calcula **ACF por contrato** (identificado por `id_col`) reindexando meses faltantes (`time_col` formatado como `YYYYMM`).
 * Ignora contratos com menos de `min_periods` meses.
-* Agrega ACF via: média (`mean`), mediana (`median`) ou ponderada (`weighted`).
+* Agrega ACF via: média (`mean`), mediana (`median`) ou ponderada (`weighted`,
+  usando o comprimento da série como peso).
 * Gera gráfico de barras horizontais com rótulos e linhas de confiança.
 
 ### 6. Analisador de Autocorrelação (`analisar_autocorrelacao`)
