@@ -10,7 +10,7 @@
 
 ## 🧩 Visão Geral
 
-`Vassoura` é uma biblioteca Python voltada para análises de correlação e multicolinearidade em dados tabulares e de séries temporais em painel, ideal para modelagem de PD Behavior, SICR e outras aplicações financeiras. Com ele você pode:
+`Vassoura` é uma biblioteca Python voltada para análises de correlação e multicolinearidade em dados tabulares e de séries temporais em painel, ideal para modelagem de Risco de Crédito e outras aplicações financeiras. Com ele você pode:
 
 * **Classificar tipos de colunas** (*numéricas*, *categóricas*, *IDs*);
 * **Calcular correlação** (Pearson, Spearman, Cramér‑V) e visualizar via heat‑map dinamicamente dimensionado;
@@ -18,6 +18,21 @@
 * **Limpar multicolinearidade** combinando filtro por correlação e VIF em um único pipeline (`clean_multicollinearity`);
 * **Analisar autocorrelação em painel** para séries temporais por contrato, agregando ACF (ACF médio, mediana, ponderado) e exibindo correlogramas;
 * **Gerar relatórios** HTML ou Markdown completos com seções de conceitos, heat‑maps, plots de VIF e autocorrelação, além de listas de variáveis removidas.
+
+
+🧹 Como a remoção de correlação funciona (padrão)
+
+Identificamos pares fortemente correlacionados (|corr| ≥ corr_threshold, padrão 0.9).
+
+Para cada par (feat_1, feat_2) calculamos, para cada variável, a mediana das correlações absolutas com todas as demais colunas (excluindo a autocorrelação 1.00).
+
+A variável com maior mediana tende a ser mais “redundante” no conjunto e é a candidata natural para descarte.
+
+Prioridades absolutas: se a variável estiver em keep_cols (lista de features prioritárias), ela jamais é removida – mesmo que tenha maior mediana.
+
+Resumo: “Remove quem cola mais com todo mundo, mas nunca toca nas prioridades.”
+
+Você pode alterar a métrica – metric={"median","mean","max"} – ou ponderar correlação com colunas protegidas (weight_keep), mas a mediana respeitando keep_cols é o default.
 
 ---
 
