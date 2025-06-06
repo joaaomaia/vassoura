@@ -1,6 +1,6 @@
 # Vassoura
 
-*Limpeza de Correlação, Multicolinearidade e Autocorrelação para DataFrames Pandas*
+*Limpeza de correlação, multicolinearidade e autocorrelação para pandas DataFrames*
 
 ![logo](imgs/social_preview_github.png)
 
