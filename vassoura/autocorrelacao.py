@@ -77,7 +77,9 @@ def compute_panel_acf(
     df_sorted = df_sorted.sort_values([id_col, time_col])
 
     # Containers
-    lag_vals: Dict[int, List[float]] = {lag: [] for lag in range(1, nlags + 1)}
+    lag_vals: Dict[int, List[Tuple[float, int]]] = {
+        lag: [] for lag in range(1, nlags + 1)
+    }
 
     # Loop por contrato
     for cid, grp in df_sorted.groupby(id_col, sort=False):
@@ -93,24 +95,26 @@ def compute_panel_acf(
             continue
 
         # Calcula ACF até nlags (statsmodels devolve lag0 … nlags)
+        series_len = int(series.count())
         acf_vals = acf(series.fillna(series.mean()), nlags=nlags, fft=True)
         for lag in range(1, nlags + 1):
-            lag_vals[lag].append(acf_vals[lag])
+            lag_vals[lag].append((float(acf_vals[lag]), series_len))
 
     # Agrega
     rows = []
-    for lag, values in lag_vals.items():
-        if not values:
+    for lag, pairs in lag_vals.items():
+        if not pairs:
             continue
-        if agg_method  == "median":
-            agg_val = float(np.median(values))
-        elif agg_method  == "weighted":
-            # peso = 1/len(series); já é parecido pois cada list entry vem de serie >= min_periods
-            weights = [1 / len(v) if not isinstance(v, list) else 1 for v in values]
-            agg_val = float(np.average(values, weights=weights))
+        acfs = [acf_val for acf_val, _ in pairs]
+        if agg_method == "weighted":
+            lengths = [length for _, length in pairs]
+            weights = [1 / l for l in lengths]
+            agg_val = float(np.average(acfs, weights=weights))
+        elif agg_method == "median":
+            agg_val = float(np.median(acfs))
         else:
-            agg_val = float(np.mean(values))
-        rows.append({"lag": lag, "acf": agg_val, "n_contracts": len(values)})
+            agg_val = float(np.mean(acfs))
+        rows.append({"lag": lag, "acf": agg_val, "n_contracts": len(pairs)})
 
     result = pd.DataFrame(rows).sort_values("lag").reset_index(drop=True)
     if result.empty:
