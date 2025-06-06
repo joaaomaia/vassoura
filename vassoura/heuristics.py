@@ -119,7 +119,6 @@ def importance(
         eval_metric="logloss",
         random_state=random_state,
         use_label_encoder=False,
-        class_weights='balanced',
         n_jobs=-1,
     )
     model.fit(X, y)
