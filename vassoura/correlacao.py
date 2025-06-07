@@ -21,8 +21,8 @@ import logging
 import math
 from typing import List, Optional
 
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.pyplot as plt
 
 try:  # mplcursors é opcional
     import mplcursors
@@ -36,6 +36,8 @@ def _pick_text_color(rgb: tuple[float, float, float]) -> str:
     r, g, b = rgb
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
     return "#000" if lum > 0.6 else "#fff"
+
+
 import pandas as pd
 import seaborn as sns
 from scipy.stats import chi2_contingency
@@ -242,7 +244,7 @@ def plot_corr_heatmap(
     title: str | None = None,
     annot: bool = False,
     fmt: str = ".2f",
-    cmap: matplotlib.colors.Colormap = sns.color_palette("flare", as_cmap=True),
+    cmap: matplotlib.colors.Colormap = sns.diverging_palette(240, 10, as_cmap=True),
     mask_upper: bool = True,
     base_figsize: float = 0.45,
     min_size: int = 6,
@@ -300,6 +302,9 @@ def plot_corr_heatmap(
         square=True,
         linewidths=0.5,
         mask=mask,
+        vmin=-1,
+        vmax=1,
+        center=0,
         cbar_kws={"shrink": 0.8},
     )
 
