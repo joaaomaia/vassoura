@@ -1,0 +1,20 @@
+import pandas as pd
+from vassoura.utils import suggest_corr_method, figsize_from_matrix, criar_dataset_pd_behavior
+
+def test_suggest_corr_method():
+    assert suggest_corr_method(["a", "b"], []) == "pearson"
+    assert suggest_corr_method(["a"], ["c"]) == "spearman"
+    assert suggest_corr_method([], ["c"]) == "cramer"
+
+def test_figsize_from_matrix_bounds():
+    small = figsize_from_matrix(2, base=0.4, min_size=6, max_size=20)
+    large = figsize_from_matrix(100, base=0.4, min_size=6, max_size=20)
+    assert small[0] >= 6 and small[0] == small[1]
+    assert large[0] <= 20 and large[0] == large[1]
+
+def test_criar_dataset_pd_behavior_columns():
+    df = criar_dataset_pd_behavior(n_clientes=5, max_anos=1, n_features=3, seed=0)
+    expected_cols = {"NroContrato", "AnoMesReferencia", "feature_01", "feature_02", "feature_03", "ever90m12"}
+    assert expected_cols <= set(df.columns)
+    # AnoMesReferencia deve estar no formato YYYYMM (int)
+    assert df["AnoMesReferencia"].dtype == int
