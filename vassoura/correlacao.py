@@ -171,7 +171,11 @@ def compute_corr_matrix(
                 import polars as pl
             except ImportError as exc:
                 raise ImportError("engine='polars' requer polars instalado") from exc
-            corr = pl.from_pandas(data).corr(method=method).to_pandas()
+            if method != "pearson":
+                raise ValueError(
+                    "engine='polars' suporta apenas o método 'pearson' para correlação"
+                )
+            corr = pl.from_pandas(data).corr().to_pandas()
         else:
             corr = data.corr(method=method)
         if verbose:
