@@ -50,6 +50,16 @@ Além disso:
 * **Dynamic Engine**: basta passar `engine="polars"` ou `"dask"` que o pipeline inteiro muda de engrenagem.
 * **Suporte total a IDs & Datas**: informe `id_cols` e `date_cols` na instância e elas ficarão protegidas do processo de limpeza e ordenação.
 
+### Heurísticas avançadas
+
+As seguintes heurísticas extras podem ser combinadas livremente no parâmetro `heuristics`:
+
+* `psi_stability` – calcula o Population Stability Index para duas janelas temporais.
+* `ks_separation` – remove variáveis com baixo poder de separação pelo KS-statistic.
+* `perm_importance` – ranking rápido via LightGBM e permutação.
+* `partial_corr_cluster` – clusterização por correlação parcial com corte mínimo em grafo.
+* `drift_leak` – identifica vazamentos de informação relacionados à data de referência.
+
 ---
 
 ## 📚 Documentação
