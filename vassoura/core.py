@@ -564,7 +564,11 @@ class Vassoura:
                     continue
                 drop_var = self._choose_var_to_drop(var1, var2)
                 if drop_var and drop_var in self.df_current.columns:
-                    self._drop([drop_var], reason=f"corr>{thr}")
+                    self._drop(
+                        [drop_var],
+                        reason=f"corr>{thr}",
+                        values=[abs(corr_val)],
+                    )
                     removed_this_iter += 1
                     if removed_this_iter >= step_limit:
                         break
@@ -616,7 +620,7 @@ class Vassoura:
             removed_this_iter = 0
             for _, row in worst.sort_values("vif", ascending=False).iterrows():
                 var = row["variable"]
-                self._drop([var], reason=f"vif>{thr}")
+                self._drop([var], reason=f"vif>{thr}", values=[row["vif"]])
                 removed_this_iter += 1
                 if removed_this_iter >= step_limit:
                     break
@@ -834,12 +838,17 @@ class Vassoura:
         exclude = set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
         return self.df_current.drop(columns=list(exclude), errors="ignore")
 
-    def _drop(self, cols: List[str], reason: str) -> None:
+    def _drop(
+        self, cols: List[str], reason: str, values: Optional[List[float]] = None
+    ) -> None:
         cols = [c for c in cols if c not in self.keep_cols]
         if not cols:
             return
         self.df_current.drop(columns=cols, errors="ignore", inplace=True)
-        self._history.append({"cols": cols, "reason": reason})
+        entry = {"cols": cols, "reason": reason}
+        if values is not None:
+            entry["values"] = values
+        self._history.append(entry)
         if self.verbose:
             print(f"  → dropped {cols} ({reason})")
 

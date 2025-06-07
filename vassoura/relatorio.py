@@ -82,6 +82,7 @@ def _plot_vif_barplot(
         data=df_plot,
         y="feature",
         x="vif",
+        hue="feature",
         palette=pal,
         legend=False,
         orient="h",
@@ -95,8 +96,10 @@ def _plot_vif_barplot(
     labels = list(df_plot["feature"])
     if n > 25:
         labels = [textwrap.shorten(str(l), width=12, placeholder="…") for l in labels]
+        ax.set_yticks(np.arange(n))
         ax.set_yticklabels(labels, fontsize=8, rotation=45, ha="right")
     else:
+        ax.set_yticks(np.arange(n))
         ax.set_yticklabels(labels, fontsize=8)
 
     max_v = df_plot["vif"].max()
@@ -198,6 +201,8 @@ def generate_report(
         "ignore",
         message="LightGBM binary classifier with TreeExplainer shap values output has changed",
     )
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=UserWarning)
     import shap
     from lightgbm import LGBMClassifier
 
@@ -410,17 +415,19 @@ def generate_report(
     n_before = len(series_before)
     n_after = len(series_after)
 
-    fig_vif, (ax_l, ax_r) = plt.subplots(
-        ncols=2,
-        sharey=True,
-        figsize=(12, 0.25 * max(n_before, n_after) + 1),
+    fig_vif_b, ax_b = plt.subplots(
+        figsize=(6, 0.25 * n_before + 1)
     )
+    _plot_vif_barplot(series_before, "VIF antes da limpeza", ax_b, thr=vif_threshold)
+    fig_vif_b.tight_layout()
+    img_vif_before = _fig_to_base64(fig_vif_b)
 
-    _plot_vif_barplot(series_before, "VIF antes da limpeza", ax_l, thr=vif_threshold)
-    _plot_vif_barplot(series_after, "VIF após a limpeza", ax_r, thr=vif_threshold)
-
-    fig_vif.tight_layout(w_pad=1)
-    img_vif_pair = _fig_to_base64(fig_vif)
+    fig_vif_a, ax_a = plt.subplots(
+        figsize=(6, 0.25 * n_after + 1)
+    )
+    _plot_vif_barplot(series_after, "VIF após a limpeza", ax_a, thr=vif_threshold)
+    fig_vif_a.tight_layout()
+    img_vif_after = _fig_to_base64(fig_vif_a)
 
     # 8) Shadow-Feature Analysis
     if target_col is not None:
@@ -670,7 +677,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             f"""
             <div class="section" id="vif">
                 <h2>Variance Inflation Factor (VIF)</h2>
-                <div class="vif-grid"><img src="{img_vif_pair}" alt="VIF antes vs após" style="max-width:100%;height:auto"></div>
+                <div class="vif-grid">
+                    <img src="{img_vif_before}" alt="VIF antes" style="max-width:100%;height:auto">
+                    <img src="{img_vif_after}" alt="VIF após" style="max-width:100%;height:auto">
+                </div>
             </div>
             """
         )
@@ -712,25 +722,39 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                         return h, sep + m
                 return r, ""
 
+            def _aggregate(hist: List[Dict[str, Any]]):
+                groups: Dict[str, Dict[str, Any]] = {}
+                for st in hist:
+                    cols = st.get("cols") or []
+                    vals = st.get("values", [None] * len(cols))
+                    heur, mot = _split_reason(st.get("reason", ""))
+                    g = groups.setdefault(heur, {"mot": mot, "items": []})
+                    for c, v in zip(cols, vals):
+                        g["items"].append((c, v))
+                for g in groups.values():
+                    g["items"].sort(
+                        key=lambda x: (x[1] is not None, x[1] if x[1] is not None else -np.inf),
+                        reverse=True,
+                    )
+                return groups
+
+            groups = _aggregate(history)
+
             html += '<div class="section" id="audit">'
             html += "<h2>Audit Trail: Colunas Removidas</h2>"
             html += '<table class="audit"><thead><tr><th>Heurística</th><th>Motivo</th><th>Colunas</th></tr></thead><tbody>'
-            for step in history:
-                if not step.get("cols"):
-                    continue
-                cols_sorted = sorted(step["cols"])
-                heur, mot = _split_reason(step.get("reason", ""))
-                html += (
-                    f"<tr><td>{heur}</td><td>{mot}</td><td><div class='feature-grid'>"
-                )
-                for col in cols_sorted:
+            for heur, info in groups.items():
+                mot = info.get("mot", "")
+                html += f"<tr><td>{heur}</td><td>{mot}</td><td><div class='feature-grid'>"
+                for col, val in info["items"]:
                     tipo = (
                         "num"
                         if col in num_cols
                         else "cat" if col in cat_cols else "unk"
                     )
                     badge = f" <span class='badge {tipo}'>{tipo if tipo!='unk' else 'unk'}</span>"
-                    html += f"<div>{col}{badge}</div>"
+                    tip = "" if val is None else f" title='{val:.3f}'"
+                    html += f"<div{tip}>{col}{badge}</div>"
                 html += "</div></td></tr>"
             html += "</tbody></table></div>"
 
@@ -744,7 +768,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             )
 
         html += "</body></html>\n"
-        output_path.write_text(html, encoding="utf-8")
+        output_path.write_bytes(html.encode("utf-8", errors="ignore"))
 
     else:
         # Versão Markdown básica
@@ -784,7 +808,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             {drift_leak_df.to_markdown() if drift_leak_df is not None else '*não calculado*'}
             """
         )
-        output_path.write_text(md, encoding="utf-8")
+        output_path.write_bytes(md.encode("utf-8", errors="ignore"))
 
     if verbose:
         LOGGER.info("Relatório gerado em %s", output_path)
