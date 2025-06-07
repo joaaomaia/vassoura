@@ -20,6 +20,8 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import os
+import warnings
 import textwrap
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -37,6 +39,13 @@ from .vif import compute_vif
 __all__ = ["generate_report"]
 
 LOGGER = logging.getLogger("vassoura")
+
+os.environ.setdefault("LIGHTGBM_DISABLE_STDERR_REDIRECT", "1")
+warnings.filterwarnings("ignore", message="No further splits with positive gain")
+warnings.filterwarnings(
+    "ignore",
+    message="LightGBM binary classifier with TreeExplainer shap values output has changed",
+)
 
 
 def _fig_to_base64(fig: plt.Figure, *, fmt: str = "png") -> str:
@@ -363,9 +372,14 @@ def generate_report(
             return float((cdf_good - cdf_bad).abs().max())
 
         ks_vals = {}
-        for col in df_clean.columns.drop(target_col):
+        cols_ks = [
+            c
+            for c in df_clean.columns.drop(target_col)
+            if c not in set(id_cols or []) and c not in set(date_cols or [])
+        ]
+        for col in cols_ks:
             ks_vals[col] = _compute_ks(df_clean[col], df_clean[target_col])
-        ks_s = pd.Series(ks_vals).sort_values()
+        ks_s = pd.Series(ks_vals).sort_values(ascending=False)
         fig_ks, ax = plt.subplots(figsize=(8, 0.4 * len(ks_s) + 1))
         pal = sns.color_palette("flare", len(ks_s))
         sns.barplot(y=ks_s.index, x=ks_s.values, palette=pal, orient="h", ax=ax)
@@ -386,6 +400,7 @@ def generate_report(
             colsample_bytree=0.8,
             random_state=0,
             class_weight="balanced",
+            verbosity=-1,
         ).fit(df_clean.drop(columns=target_col), df_clean[target_col])
 
         expl = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
@@ -395,7 +410,8 @@ def generate_report(
             np.abs(shap_arr).mean(0),
             index=df_clean.drop(columns=target_col).columns,
         )
-        shap_gain = shap_gain.sort_values()
+        shap_gain = shap_gain.drop(list(id_cols or []) + list(date_cols or []), errors="ignore")
+        shap_gain = shap_gain.sort_values(ascending=False)
 
         fig_shap, ax = plt.subplots(figsize=(8, 0.4 * len(shap_gain) + 1))
         pal2 = sns.color_palette("flare", len(shap_gain))
@@ -560,21 +576,6 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             html += drift_leak_df.to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
-        # Seção de variáveis removidas
-        html += textwrap.dedent(
-            f"""
-            <div class="section">
-                <h2>9. Variáveis Removidas</h2>
-                <ul>
-            """
-        )
-        if dropped_cols:
-            for var in dropped_cols:
-                html += f"<li>{var}</li>\n"
-        else:
-            html += "<li><i>Nenhuma variável removida</i></li>\n"
-        html += "</ul>\n</div>\n"
-
         if dropped_cols and history:
 
             def _split_reason(r: str) -> tuple[str, str]:
@@ -600,11 +601,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 "<div class=\"section\" id=\"shadow\">"
                 "<h2>10. Shadow-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
-                "<h3>KS comparativo</h3>"
-                f"<img src=\"{img_ks_shadow}\" alt=\"KS shadow\">"
-                "<h3>SHAP Gain comparativo</h3>"
-                f"<img src=\"{img_shap_shadow}\" alt=\"SHAP shadow\">"
-                "</div>\n"
+                f"<div style='display:flex;gap:20px;flex-wrap:wrap'>"
+                f"<div><h3>KS comparativo</h3><img src='{img_ks_shadow}' alt='KS shadow'></div>"
+                f"<div><h3>SHAP Gain comparativo</h3><img src='{img_shap_shadow}' alt='SHAP shadow'></div>"
+                "</div></div>\n"
             )
 
         html += "</body></html>\n"
@@ -646,9 +646,6 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
 
             ## 8. Drift vs Target Leakage
             {drift_leak_df.to_markdown() if drift_leak_df is not None else '*não calculado*'}
-
-            ## 9. Variáveis Removidas
-            {', '.join(dropped_cols) or '*nenhuma*'}
             """
         )
         output_path.write_text(md, encoding="utf-8")
