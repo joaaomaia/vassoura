@@ -4,6 +4,8 @@ from .utils import (
     figsize_from_matrix,
     criar_dataset_pd_behavior,
 )
+
+from . import _compat
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
 from .vif import compute_vif, remove_high_vif
 from .limpeza import clean
