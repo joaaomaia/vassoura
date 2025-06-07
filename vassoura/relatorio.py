@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 import seaborn as sns
 
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
@@ -48,29 +49,30 @@ def _fig_to_base64(fig: plt.Figure, *, fmt: str = "png") -> str:
     return f"data:image/{fmt};base64,{img_b64}"
 
 
-def _plot_vif_barplot(vif_df: pd.DataFrame, title: str) -> plt.Figure:
-    """Cria um gráfico de barras horizontais para o DataFrame de VIF.
-    Rotula cada barra com valor formatado em duas casas decimais."""
-    fig, ax = plt.subplots(figsize=(8, 0.5 * max(len(vif_df), 1) + 1))
-    sns.barplot(data=vif_df, y="variable", x="vif", orient="h", ax=ax)
+def _pick_text_color(rgb: tuple[float, float, float]) -> str:
+    """Escolhe cor de texto preto/branco baseada na luminância."""
+    r, g, b = rgb
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return "#000" if lum > 0.6 else "#fff"
+
+
+def _plot_vif_barplot(vif_s: pd.Series, title: str, ax: plt.Axes) -> None:
+    """Barplot de VIF com paleta *flare* e rótulos contrastantes."""
+    pal = sns.color_palette("flare", len(vif_s))
+    sns.barplot(y=vif_s.index, x=vif_s.values, orient="h", palette=pal, ax=ax)
     ax.set_title(title)
-    ax.set_xlabel("VIF")
-    ax.set_ylabel("Variável")
-
-    # Adiciona rótulo de valor em cada barra
-    for i, row in (
-        vif_df.sort_values("vif", ascending=True).reset_index(drop=True).iterrows()
-    ):
+    for bar, val in zip(ax.patches, vif_s.values):
+        txt_col = _pick_text_color(bar.get_facecolor()[:3])
         ax.text(
-            row["vif"] + 0.02 * vif_df["vif"].max(),
-            i,
-            f"{row['vif']:.2f}",
+            val * 0.01,
+            bar.get_y() + bar.get_height() / 2,
+            f"{val:.1f}",
             va="center",
-            fontsize=9,
+            ha="left",
+            color=txt_col,
+            fontweight="bold",
         )
-
-    plt.tight_layout()
-    return fig
+    ax.set_xlabel("VIF")
 
 
 def generate_report(
@@ -324,14 +326,84 @@ def generate_report(
         )
         img_corr_after = _fig_to_base64(fig_corr_after)
 
-    # 7) Plots de VIF antes e após limpeza
-    fig_vif_before = _plot_vif_barplot(vif_before, title="VIF antes da limpeza")
-    img_vif_before = _fig_to_base64(fig_vif_before)
+    # 7) Plots de VIF antes e após limpeza em uma única figura
+    vif_before_s = vif_before.set_index("variable")["vif"]
+    vif_after_s = (
+        vif_after.set_index("variable")["vif"] if vif_after is not None else pd.Series(dtype=float)
+    )
+    fig_vif, (ax_l, ax_r) = plt.subplots(
+        ncols=2,
+        sharey=True,
+        figsize=(12, 0.45 * max(len(vif_before_s), 1) + 1),
+    )
+    _plot_vif_barplot(vif_before_s, "VIF antes", ax_l)
+    _plot_vif_barplot(vif_after_s, "VIF após", ax_r)
+    fig_vif.tight_layout(w_pad=2)
+    img_vif_pair = _fig_to_base64(fig_vif)
 
-    img_vif_after = ""
-    if show_final and vif_after is not None:
-        fig_vif_after = _plot_vif_barplot(vif_after, title="VIF após limpeza")
-        img_vif_after = _fig_to_base64(fig_vif_after)
+    # 8) Shadow-Feature Analysis (KS + SHAP)
+    if target_col is not None:
+        if "shadow" not in df_clean.columns:
+            np.random.seed(0)
+            df_clean["shadow"] = np.random.rand(len(df_clean))
+
+        def _compute_ks(s: pd.Series, target: pd.Series, n_bins: int = 10) -> float:
+            if s.dtype.kind in "bifc" and s.nunique() > 1:
+                try:
+                    b = pd.qcut(s, q=n_bins, duplicates="drop")
+                except ValueError:
+                    return 0.0
+            else:
+                b = s.astype("category")
+            tab = pd.crosstab(b, target)
+            if tab.shape[1] != 2:
+                return 0.0
+            cdf_good = tab[0].cumsum() / tab[0].sum()
+            cdf_bad = tab[1].cumsum() / tab[1].sum()
+            return float((cdf_good - cdf_bad).abs().max())
+
+        ks_vals = {}
+        for col in df_clean.columns.drop(target_col):
+            ks_vals[col] = _compute_ks(df_clean[col], df_clean[target_col])
+        ks_s = pd.Series(ks_vals).sort_values()
+        fig_ks, ax = plt.subplots(figsize=(8, 0.4 * len(ks_s) + 1))
+        pal = sns.color_palette("flare", len(ks_s))
+        sns.barplot(y=ks_s.index, x=ks_s.values, palette=pal, orient="h", ax=ax)
+        idx_shadow = ks_s.index.get_loc("shadow")
+        ax.patches[idx_shadow].set_edgecolor("#e63946")
+        ax.patches[idx_shadow].set_linewidth(3)
+        ax.set_title("KS por feature (shadow destacado)")
+        img_ks_shadow = _fig_to_base64(fig_ks)
+
+        from lightgbm import LGBMClassifier
+        import shap
+
+        model = LGBMClassifier(
+            n_estimators=300,
+            learning_rate=0.1,
+            max_depth=-1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=0,
+            class_weight="balanced",
+        ).fit(df_clean.drop(columns=target_col), df_clean[target_col])
+
+        expl = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
+        shap_vals = expl.shap_values(df_clean.drop(columns=target_col))
+        shap_arr = shap_vals[1] if isinstance(shap_vals, list) else shap_vals
+        shap_gain = pd.Series(
+            np.abs(shap_arr).mean(0),
+            index=df_clean.drop(columns=target_col).columns,
+        )
+        shap_gain = shap_gain.sort_values()
+
+        fig_shap, ax = plt.subplots(figsize=(8, 0.4 * len(shap_gain) + 1))
+        pal2 = sns.color_palette("flare", len(shap_gain))
+        for i, (feat, val) in enumerate(shap_gain.items()):
+            color = "#e63946" if feat == "shadow" else pal2[i]
+            ax.barh(feat, val, color=color)
+        ax.set_title("SHAP Gain (shadow destacado)")
+        img_shap_shadow = _fig_to_base64(fig_shap)
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -364,6 +436,8 @@ h1,h2,h3{{color:var(--primary);margin:0 0 .6em}}
 .section{{margin-bottom:48px;padding:32px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);}}
 .feature-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;}}
 .feature-grid div{{padding:6px 10px;background:var(--bg);border-radius:var(--radius);}}
+.vif-grid{{display:flex;gap:12px;flex-wrap:wrap}}
+.vif-grid img{{flex:1 1 48%}}
 .badge{{padding:2px 6px;border-radius:4px;font-size:.75rem;font-family:var(--mono)}}
 .badge.num{{background:var(--success);color:#fff;}}
 .badge.cat{{background:var(--warning);color:#000;}}
@@ -378,7 +452,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             </head>
             <body>
                 <h1>Relatório de Correlação & Multicolinearidade – Vassoura</h1>
-                <nav style="margin-bottom:16px"><a href="#tipos">Tipos</a> · <a href="#heatmaps">Heatmaps</a> · <a href="#vif">VIF</a> · <a href="#audit">Audit trail</a></nav>
+                <nav style="margin-bottom:16px"><a href="#tipos">Tipos</a> · <a href="#heatmaps">Heatmaps</a> · <a href="#vif">VIF</a> · <a href="#audit">Audit trail</a> · <a href="#shadow">Shadow</a></nav>
                 <div class="section">
             """
         )
@@ -437,14 +511,14 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             <div class="section" id="heatmaps">
                 <h2>3. Heatmaps de Correlação</h2>
                 <h3>Antes da Limpeza ({corr_method_eff.capitalize()})</h3>
-                <img src="{img_corr_before}" alt="Correlação antes">
+                <img src="{img_corr_before}" alt="flare_corr_antes">
             """
         )
         if show_final and img_corr_after:
             html += textwrap.dedent(
                 f"""
                 <h3>Após a Limpeza ({corr_method_eff.capitalize()})</h3>
-                <img src="{img_corr_after}" alt="Correlação após">
+                <img src="{img_corr_after}" alt="flare_corr_depois">
                 """
             )
         elif not show_final:
@@ -456,20 +530,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             f"""
             <div class="section" id="vif">
                 <h2>4. Variance Inflation Factor (VIF)</h2>
-                <h3>Antes da Limpeza</h3>
-                <img src="{img_vif_before}" alt="VIF antes">
+                <div class="vif-grid"><img src="{img_vif_pair}" alt="VIF antes vs após"></div>
+            </div>
             """
         )
-        if show_final and img_vif_after:
-            html += textwrap.dedent(
-                f"""
-                <h3>Após a Limpeza</h3>
-                <img src="{img_vif_after}" alt="VIF após">
-                """
-            )
-        elif not show_final:
-            html += "<p><i>Nenhuma variável removida; VIF estava dentro do limiar definido.</i></p>\n"
-        html += "</div>\n"
 
         if psi_series is not None:
             html += "<div class=\"section\" id=\"psi\">"
@@ -477,27 +541,22 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             html += psi_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
-        if ks_series is not None:
-            html += "<div class=\"section\" id=\"ks\">"
-            html += "<h2>6. KS Separation</h2>"
-            html += ks_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
-            html += "</div>\n"
 
         if perm_series is not None:
             html += "<div class=\"section\" id=\"perm\">"
-            html += "<h2>7. Permutation Importance</h2>"
+            html += "<h2>6. Permutation Importance</h2>"
             html += perm_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
         if partial_graph is not None:
             html += "<div class=\"section\" id=\"partial\">"
-            html += "<h2>8. Partial Correlation Cluster</h2>"
+            html += "<h2>7. Partial Correlation Cluster</h2>"
             html += f"<p>{len(partial_graph.nodes())} variáveis no vertex cover.</p>"
             html += "</div>\n"
 
         if drift_leak_df is not None:
             html += "<div class=\"section\" id=\"drift\">"
-            html += "<h2>9. Drift vs Target Leakage</h2>"
+            html += "<h2>8. Drift vs Target Leakage</h2>"
             html += drift_leak_df.to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
@@ -505,7 +564,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         html += textwrap.dedent(
             f"""
             <div class="section">
-                <h2>10. Variáveis Removidas</h2>
+                <h2>9. Variáveis Removidas</h2>
                 <ul>
             """
         )
@@ -535,6 +594,18 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 heur, mot = _split_reason(step.get("reason", ""))
                 html += f"<tr><td>{cols}</td><td>{heur}</td><td>{mot}</td></tr>"
             html += "</tbody></table></div>"
+
+        if target_col is not None:
+            html += (
+                "<div class=\"section\" id=\"shadow\">"
+                "<h2>10. Shadow-Feature Analysis</h2>"
+                "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
+                "<h3>KS comparativo</h3>"
+                f"<img src=\"{img_ks_shadow}\" alt=\"KS shadow\">"
+                "<h3>SHAP Gain comparativo</h3>"
+                f"<img src=\"{img_shap_shadow}\" alt=\"SHAP shadow\">"
+                "</div>\n"
+            )
 
         html += "</body></html>\n"
         output_path.write_text(html, encoding="utf-8")
@@ -567,19 +638,16 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             ## 5. Estabilidade Temporal (PSI)
             {psi_series.to_markdown() if psi_series is not None else '*não calculado*'}
 
-            ## 6. KS Separation
-            {ks_series.to_markdown() if ks_series is not None else '*não calculado*'}
-
-            ## 7. Permutation Importance
+            ## 6. Permutation Importance
             {perm_series.to_markdown() if perm_series is not None else '*não calculado*'}
 
-            ## 8. Partial Correlation Cluster
+            ## 7. Partial Correlation Cluster
             {len(partial_graph.nodes()) if partial_graph is not None else 0} variáveis no vertex cover
 
-            ## 9. Drift vs Target Leakage
+            ## 8. Drift vs Target Leakage
             {drift_leak_df.to_markdown() if drift_leak_df is not None else '*não calculado*'}
 
-            ## 10. Variáveis Removidas
+            ## 9. Variáveis Removidas
             {', '.join(dropped_cols) or '*nenhuma*'}
             """
         )

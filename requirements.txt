@@ -7,3 +7,5 @@ statsmodels>=0.14
 polars>=1.30.0
 dask>=2025.5.1
 mplcursors==0.6
+shap>=0.47
+lightgbm>=4.0

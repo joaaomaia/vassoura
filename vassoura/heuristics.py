@@ -420,8 +420,11 @@ def perm_importance_lgbm(
         )
     model.fit(X, y)
 
+    score = metric
+    if metric == "auc":
+        score = "roc_auc"
     result = permutation_importance(
-        model, X, y, scoring=metric, random_state=random_state, n_repeats=5
+        model, X, y, scoring=score, random_state=random_state, n_repeats=5
     )
     imp = pd.Series(result.importances_mean, index=X.columns, name="perm_imp")
 
