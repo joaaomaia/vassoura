@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Testes básicos de integração do pacote Vassoura.
 
 Execute com:
@@ -16,6 +17,7 @@ import vassoura as vs  # type: ignore
 # Dataset sintético
 # ---------------------------------------------------------------------------
 
+
 def _make_dummy_df(n: int = 200) -> pd.DataFrame:
     rng = np.random.default_rng(42)
     x1 = rng.normal(size=n)
@@ -25,9 +27,11 @@ def _make_dummy_df(n: int = 200) -> pd.DataFrame:
     target = (x1 + x3 + rng.normal(scale=0.3, size=n) > 0).astype(int)
     return pd.DataFrame({"x1": x1, "x2": x2, "x3": x3, "cat": cat, "target": target})
 
+
 # ---------------------------------------------------------------------------
 # search_dtypes
 # ---------------------------------------------------------------------------
+
 
 def test_search_dtypes():
     df = _make_dummy_df()
@@ -35,21 +39,27 @@ def test_search_dtypes():
     assert set(num) == {"x1", "x2", "x3"}
     assert set(cat) == {"cat"}
 
+
 # ---------------------------------------------------------------------------
 # compute_corr_matrix
 # ---------------------------------------------------------------------------
 
+
 def test_compute_corr_matrix():
     df = _make_dummy_df()
-    corr = vs.compute_corr_matrix(df, method="pearson", target_col="target", verbose=False)
+    corr = vs.compute_corr_matrix(
+        df, method="pearson", target_col="target", verbose=False
+    )
     assert corr.shape[0] == corr.shape[1]  # quadrada
     assert "x1" in corr.columns and "x2" in corr.columns
     # x1 e x2 devem ter alta correlação
     assert corr.loc["x1", "x2"] > 0.9
 
+
 # ---------------------------------------------------------------------------
 # compute_vif
 # ---------------------------------------------------------------------------
+
 
 def test_compute_vif():
     df = _make_dummy_df()
@@ -59,9 +69,11 @@ def test_compute_vif():
     # x1 ou x2 devem ter VIF alto devido à correlação
     assert vif["vif"].max() > 5
 
+
 # ---------------------------------------------------------------------------
 # clean
 # ---------------------------------------------------------------------------
+
 
 def test_clean():
     df = _make_dummy_df()
@@ -120,3 +132,19 @@ def test_help(capsys):
     vs.Vassoura(_make_dummy_df()).help()
     captured = capsys.readouterr()
     assert "Vassoura usage" in captured.out
+
+
+def test_iv_skipped_when_target_not_binary(capsys):
+    df = _make_dummy_df()
+    df["id"] = np.arange(len(df))
+    vsess = vs.Vassoura(
+        df,
+        target_col="id",
+        heuristics=["iv"],
+        verbose=True,
+    )
+    result = vsess.run()
+    captured = capsys.readouterr()
+    assert "Skipping IV heuristic" in captured.out
+    # Nenhuma coluna removida
+    assert result.equals(df)
