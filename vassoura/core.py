@@ -6,6 +6,7 @@ Refactored 2025-06-05
 * Adds robust guardrails no VIF, pulando quando não houver colunas numéricas suficientes.
 * Mantém heurística de IV funcional e placeholders para `importance` e `graph_cut`.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,11 +27,17 @@ from .heuristics import graph_cut
 # Helper functions                                                      #
 # --------------------------------------------------------------------- #
 
+
 def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> float:
     """Computes Information Value using quantile binning (numeric) or
     category grouping (categorical). Very light implementation – for
     production we may migrate to `scorecardpy` or `optbinning`.
     """
+    # Ensure target has exactly two classes to avoid building a huge crosstab
+    if target.nunique(dropna=False) != 2:
+        warnings.warn("Target must be binary (0/1) for IV calculation.")
+        return 0.0
+
     if series.dtype.kind in "bifc":
         # Numeric – quantile bins (duplicates handled gracefully)
         try:
@@ -216,10 +223,15 @@ class Vassoura:
                 engine=self.engine,
                 verbose=self.verbose,
             )
-        mask = (self._corr_matrix.abs() > thr) & (~np.eye(len(self._corr_matrix), dtype=bool))
+        mask = (self._corr_matrix.abs() > thr) & (
+            ~np.eye(len(self._corr_matrix), dtype=bool)
+        )
         pairs = mask.stack().loc[lambda s: s]
         for var1, var2 in pairs.index:
-            if var1 not in self.df_current.columns or var2 not in self.df_current.columns:
+            if (
+                var1 not in self.df_current.columns
+                or var2 not in self.df_current.columns
+            ):
                 continue
             drop_var = self._choose_var_to_drop(var1, var2)
             self._drop([drop_var], reason=f"corr>{thr}")
@@ -233,7 +245,9 @@ class Vassoura:
         # Se tiver ≤1 coluna numérica, não faz sentido calcular VIF
         if len(num_cols) <= 1:
             if self.verbose:
-                print(f"[Vassoura] Pulando VIF (col numéricas insuficientes: {len(num_cols)})")
+                print(
+                    f"[Vassoura] Pulando VIF (col numéricas insuficientes: {len(num_cols)})"
+                )
             return
         if self.verbose:
             print(f"[Vassoura] VIF heuristic (thr={thr})")
@@ -261,11 +275,15 @@ class Vassoura:
         if self.target_col is None:
             warnings.warn("IV heuristic skipped: target_col not provided.")
             return
+        target = self.df_current[self.target_col]
+        if target.nunique(dropna=False) != 2:
+            if self.verbose:
+                print("[Vassoura] Skipping IV heuristic (target not binary)")
+            return
         if self.verbose:
             print(f"[Vassoura] IV heuristic (thr<{thr}) – removendo low IV")
         if self._iv_series is None:
             iv_values = {}
-            target = self.df_current[self.target_col]
             for col in self.df_current.columns:
                 if col == self.target_col or col in self.keep_cols:
                     continue
@@ -320,7 +338,9 @@ class Vassoura:
         # Se tiver 0 ou 1 coluna numérica, não faz sentido rodar o grafo
         if len(df_for_graph.columns) <= 1:
             if self.verbose:
-                print(f"[Vassoura] Pulando Graph-cut (só {len(df_for_graph.columns)} coluna(s) numérica(s)).")
+                print(
+                    f"[Vassoura] Pulando Graph-cut (só {len(df_for_graph.columns)} coluna(s) numérica(s))."
+                )
             return
 
         # 3) Chamar a função graph_cut do módulo heuristics
@@ -333,7 +353,6 @@ class Vassoura:
         removed = result.get("removed", [])
         if removed:
             self._drop(removed, reason=f"graph_cut>{thr}")
-
 
     # ------------------------------------------------------------------ #
     # Helpers                                                            #
