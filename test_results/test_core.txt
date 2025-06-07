@@ -16,10 +16,4 @@ vassoura/tests/test_core.py::test_missing_removal PASSED                 [ 77%]
 vassoura/tests/test_core.py::test_help PASSED                            [ 88%]
 vassoura/tests/test_core.py::test_iv_skipped_when_target_not_binary PASSED [100%]
 
-============================== warnings summary ===============================
-vassoura/tests/test_core.py: 24 warnings
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\utils.py:216: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
-    try_dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================= 9 passed, 24 warnings in 3.28s ========================
+============================== 9 passed in 2.15s ==============================
