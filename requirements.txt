@@ -9,3 +9,4 @@ dask>=2025.5.1
 mplcursors==0.6
 shap>=0.47
 lightgbm>=4.0
+networkx>=3.2
