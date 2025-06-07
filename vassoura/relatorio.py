@@ -658,7 +658,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 return r, ""
 
             html += '<div class="section" id="audit">'
-            html += "<h2>Audit trail</h2>"
+            html += "<h2>5. Audit trail</h2>"
             html += '<table class="audit"><thead><tr><th>Colunas</th><th>Heurística</th><th>Motivo</th></tr></thead><tbody>'
             for step in history:
                 if not step.get("cols"):
@@ -671,7 +671,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         if target_col is not None:
             html += (
                 "<div class=\"section\" id=\"shadow\">"
-                "<h2>10. Shadow-Feature Analysis</h2>"
+                "<h2>6. Shadow-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
                 f"<img src='{img_shadow_triplet}' alt='SHAP · KS · LightGBM Gain'>"
                 "</div>\n"
