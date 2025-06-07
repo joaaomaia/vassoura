@@ -22,6 +22,7 @@ from typing import Any, Dict, List
 import warnings
 
 import pandas as pd
+import numpy as np
 
 # Dependências opcionais (import inside functions)
 
@@ -30,6 +31,11 @@ __all__ = [
     "graph_cut",
     "iv",
     "variance",
+    "psi_stability",
+    "ks_separation",
+    "perm_importance_lgbm",
+    "partial_corr_cluster",
+    "drift_vs_target_leakage",
 ]
 
 
@@ -247,4 +253,298 @@ def variance(
             "min_nonnull": min_nonnull,
         },
     }
+
+
+# --------------------------------------------------------------------- #
+# PSI Stability: population stability index between time windows         #
+# --------------------------------------------------------------------- #
+
+def psi_stability(
+    df: pd.DataFrame,
+    *,
+    date_col: str,
+    target_col: str | None = None,
+    window: tuple[str, str],
+    bins: int = 10,
+    psi_thr: float = 0.25,
+    keep_cols: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Calcula o *Population Stability Index* por coluna.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Conjunto completo de dados.
+    date_col : str
+        Coluna base para o recorte temporal.
+    target_col : str, optional
+        Coluna alvo a ser ignorada no cálculo.
+    window : tuple[str, str]
+        Par de datas (referência, out-of-time) em formato ISO ou datetime.
+    bins : int
+        Número de quantis para binarizar numéricos.
+    psi_thr : float
+        Limiar acima do qual a coluna é considerada instável.
+    keep_cols : list[str] | None
+        Colunas protegidas contra remoção.
+    """
+    keep_cols = set(keep_cols or [])
+    if date_col not in df.columns:
+        return {"removed": [], "artefacts": None, "meta": {"window": window}}
+
+    ref, oot = window
+    sdate = pd.to_datetime(df[date_col].astype(str))
+    df_ref = df[sdate.astype(str).str.startswith(str(ref))]
+    df_oot = df[sdate.astype(str).str.startswith(str(oot))]
+
+    if df_ref.empty or df_oot.empty:
+        warnings.warn("psi_stability skipped – janelas incompletas")
+        return {"removed": [], "artefacts": None, "meta": {"window": window}}
+
+    psi_vals = {}
+    removed: List[str] = []
+    for col in df.columns:
+        if col in {date_col, target_col} or col in keep_cols:
+            continue
+        s1 = df_ref[col]
+        s2 = df_oot[col]
+        if s1.dtype.kind in "bifc" and s1.nunique() > 1:
+            try:
+                b1 = pd.qcut(s1, q=bins, duplicates="drop")
+                b2 = pd.qcut(s2, q=bins, duplicates="drop")
+            except ValueError:
+                continue
+        else:
+            b1 = s1.astype("category")
+            b2 = s2.astype("category")
+        p1 = b1.value_counts(normalize=True)
+        p2 = b2.value_counts(normalize=True)
+        all_bins = p1.index.union(p2.index)
+        p1 = p1.reindex(all_bins, fill_value=1e-6)
+        p2 = p2.reindex(all_bins, fill_value=1e-6)
+        psi = ((p1 - p2) * np.log(p1 / p2)).sum()
+        psi_vals[col] = psi
+        if psi > psi_thr and col not in keep_cols:
+            removed.append(col)
+
+    return {
+        "removed": removed,
+        "artefacts": pd.Series(psi_vals, name="psi"),
+        "meta": {"window": window, "psi_thr": psi_thr},
+    }
+
+
+# --------------------------------------------------------------------- #
+# KS Separation                                                          #
+# --------------------------------------------------------------------- #
+
+def ks_separation(
+    df: pd.DataFrame,
+    *,
+    target_col: str,
+    ks_thr: float = 0.05,
+    n_bins: int = 10,
+    keep_cols: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Calcula o KS-statistic por coluna."""
+
+    keep_cols = set(keep_cols or [])
+    target = df[target_col]
+    if target.nunique(dropna=False) != 2:
+        warnings.warn("ks_separation skipped – target não binário")
+        return {"removed": [], "artefacts": None, "meta": {}}
+
+    ks_vals = {}
+    removed: List[str] = []
+    for col in df.columns:
+        if col == target_col or col in keep_cols:
+            continue
+        s = df[col]
+        if s.dtype.kind in "bifc" and s.nunique() > 1:
+            try:
+                b = pd.qcut(s, q=n_bins, duplicates="drop")
+            except ValueError:
+                continue
+        else:
+            b = s.astype("category")
+        tab = pd.crosstab(b, target)
+        if tab.shape[1] != 2:
+            continue
+        cdf_good = tab[0].cumsum() / tab[0].sum()
+        cdf_bad = tab[1].cumsum() / tab[1].sum()
+        ks = (cdf_good - cdf_bad).abs().max()
+        ks_vals[col] = float(ks)
+        if ks < ks_thr and col not in keep_cols:
+            removed.append(col)
+
+    return {
+        "removed": removed,
+        "artefacts": pd.Series(ks_vals, name="ks"),
+        "meta": {"ks_thr": ks_thr},
+    }
+
+
+# --------------------------------------------------------------------- #
+# Permutation importance with LightGBM                                  #
+# --------------------------------------------------------------------- #
+
+def perm_importance_lgbm(
+    df: pd.DataFrame,
+    *,
+    target_col: str,
+    metric: str = "auc",
+    n_estimators: int = 300,
+    drop_lowest: float | int = 0.2,
+    random_state: int = 42,
+    keep_cols: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Avalia importância de permutação via LightGBM."""
+
+    try:
+        from lightgbm import LGBMClassifier, LGBMRegressor
+        from sklearn.inspection import permutation_importance
+    except Exception:  # pragma: no cover
+        warnings.warn("perm_importance_lgbm skipped – lightgbm não instalado")
+        return {"removed": [], "artefacts": None, "meta": {}}
+
+    keep_cols = set(keep_cols or [])
+    X = df.drop(columns=[target_col])
+    y = df[target_col]
+    if y.nunique() == 2:
+        model = LGBMClassifier(
+            n_estimators=n_estimators, random_state=random_state, n_jobs=-1
+        )
+    else:
+        model = LGBMRegressor(
+            n_estimators=n_estimators, random_state=random_state, n_jobs=-1
+        )
+    model.fit(X, y)
+
+    result = permutation_importance(
+        model, X, y, scoring=metric, random_state=random_state, n_repeats=5
+    )
+    imp = pd.Series(result.importances_mean, index=X.columns, name="perm_imp")
+
+    if drop_lowest < 1:
+        cutoff = imp.quantile(drop_lowest)
+        removed = imp[imp <= cutoff].index.tolist()
+    else:
+        removed = imp.sort_values().head(int(drop_lowest)).index.tolist()
+    removed = [c for c in removed if c not in keep_cols]
+
+    return {
+        "removed": removed,
+        "artefacts": imp,
+        "meta": {"drop_lowest": drop_lowest},
+    }
+
+
+# --------------------------------------------------------------------- #
+# Partial correlation cluster                                            #
+# --------------------------------------------------------------------- #
+
+def partial_corr_cluster(
+    df: pd.DataFrame,
+    *,
+    corr_thr: float = 0.6,
+    keep_cols: List[str] | None = None,
+    method: str = "pearson",
+) -> Dict[str, Any]:
+    """Agrupa colunas correlacionadas via correlação parcial."""
+
+    try:
+        import networkx as nx
+        import numpy as np
+    except ImportError:  # pragma: no cover
+        warnings.warn("partial_corr_cluster skipped – networkx não instalado")
+        return {"removed": [], "artefacts": None, "meta": {}}
+
+    keep_cols = set(keep_cols or [])
+    corr = df.corr(method=method)
+    prec = np.linalg.pinv(corr)
+    pcorr = -prec / np.sqrt(np.outer(np.diag(prec), np.diag(prec)))
+    np.fill_diagonal(pcorr, 1)
+    pc_df = pd.DataFrame(pcorr, index=corr.index, columns=corr.columns)
+
+    edges = [
+        (i, j)
+        for i in pc_df.columns
+        for j in pc_df.columns
+        if abs(pc_df.loc[i, j]) > corr_thr and i < j
+    ]
+
+    G = nx.Graph()
+    G.add_nodes_from(pc_df.columns)
+    G.add_edges_from(edges)
+    approx = nx.algorithms.approximation
+    if hasattr(approx, "min_vertex_cover"):
+        cover = approx.min_vertex_cover(G)
+    else:
+        cover = approx.min_weighted_vertex_cover(G)
+    removed = [v for v in cover if v not in keep_cols]
+
+    return {
+        "removed": removed,
+        "artefacts": G.subgraph(cover).copy(),
+        "meta": {"corr_thr": corr_thr, "method": method},
+    }
+
+
+# --------------------------------------------------------------------- #
+# Drift vs Target Leakage                                                #
+# --------------------------------------------------------------------- #
+
+def drift_vs_target_leakage(
+    df: pd.DataFrame,
+    *,
+    date_col: str,
+    target_col: str,
+    drift_thr: float = 0.3,
+    leak_thr: float = 0.5,
+    keep_cols: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Detecta variáveis com forte drift temporal e alta correlação com o target."""
+
+    keep_cols = set(keep_cols or [])
+    if date_col not in df.columns:
+        return {"removed": [], "artefacts": None, "meta": {}}
+
+    date_ord = pd.to_datetime(df[date_col]).view("int64")
+    target = df[target_col]
+
+    metrics = {}
+    removed: List[str] = []
+
+    for col in df.columns:
+        if col in {date_col, target_col} or col in keep_cols:
+            continue
+        s = df[col]
+        if pd.api.types.is_numeric_dtype(s):
+            corr_date = abs(pd.Series(s).corr(pd.Series(date_ord)))
+            corr_target = abs(pd.Series(s).corr(pd.Series(target)))
+        else:
+            # categórica: usa Spearman para data e IV p/ target
+            codes = s.astype("category").cat.codes
+            corr_date = abs(pd.Series(codes).corr(pd.Series(date_ord), method="spearman"))
+            # informação de valor (IV)
+            tab = pd.crosstab(s, target)
+            if tab.shape[1] != 2:
+                corr_target = 0.0
+            else:
+                dist_good = tab[0] / tab[0].sum()
+                dist_bad = tab[1] / tab[1].sum()
+                woe = np.log((dist_good + 1e-6) / (dist_bad + 1e-6))
+                corr_target = float(((dist_good - dist_bad) * woe).sum())
+
+        metrics[col] = {"corr_date": corr_date, "corr_target": corr_target}
+        if corr_date > drift_thr and corr_target > leak_thr and col not in keep_cols:
+            removed.append(col)
+
+    artefacts = pd.DataFrame(metrics).T
+    return {
+        "removed": removed,
+        "artefacts": artefacts,
+        "meta": {"drift_thr": drift_thr, "leak_thr": leak_thr},
+    }
+
 

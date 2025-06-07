@@ -19,7 +19,14 @@ import numpy as np
 import pandas as pd
 
 from .correlacao import compute_corr_matrix
-from .heuristics import graph_cut
+from .heuristics import (
+    graph_cut,
+    psi_stability,
+    ks_separation,
+    perm_importance_lgbm,
+    partial_corr_cluster,
+    drift_vs_target_leakage,
+)
 from .relatorio import generate_report
 from .utils import parse_verbose
 from .vif import compute_vif
@@ -253,6 +260,12 @@ class Vassoura:
             "iv": 0.02,
             "variance": 1e-4,
             "variance_dom": 0.95,
+            "psi_stability": 0.25,
+            "ks_separation": 0.05,
+            "perm_importance": 0.2,
+            "partial_corr_cluster": 0.6,
+            "drift_leak_drift": 0.3,
+            "drift_leak_leak": 0.5,
         }
         if missing_threshold is not None:
             self.thresholds["missing"] = missing_threshold
@@ -266,6 +279,11 @@ class Vassoura:
         self._vif_df: Optional[pd.DataFrame] = None
         self._iv_series: Optional[pd.Series] = None
         self._variance_series: Optional[pd.Series] = None
+        self._psi_series: Optional[pd.Series] = None
+        self._ks_series: Optional[pd.Series] = None
+        self._perm_series: Optional[pd.Series] = None
+        self._partial_graph: Any = None
+        self._drift_leak_df: Optional[pd.DataFrame] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
 
         # Map heurísticas → métodos
@@ -277,6 +295,11 @@ class Vassoura:
             "importance": self._apply_importance,
             "graph_cut": self._apply_graph_cut,
             "variance": self._apply_variance,
+            "psi_stability": self._apply_psi_stability,
+            "ks_separation": self._apply_ks_separation,
+            "perm_importance": self._apply_perm_importance_lgbm,
+            "partial_corr_cluster": self._apply_partial_corr_cluster,
+            "drift_leak": self._apply_drift_vs_target_leakage,
         }
 
     # ------------------------------------------------------------------ #
@@ -429,6 +452,11 @@ class Vassoura:
             "corr_after": self._corr_matrix_final,
             "vif_before": self._vif_df_before,
             "vif_after": self._vif_df,
+            "psi_series": self._psi_series,
+            "ks_series": self._ks_series,
+            "perm_series": self._perm_series,
+            "partial_graph": self._partial_graph,
+            "drift_leak_df": self._drift_leak_df,
             "dropped_cols": self.dropped,
             "id_cols": self.id_cols,
             "date_cols": self.date_cols,
@@ -474,6 +502,11 @@ class Vassoura:
         self._vif_df = None
         self._iv_series = None
         self._variance_series = None
+        self._psi_series = None
+        self._ks_series = None
+        self._perm_series = None
+        self._partial_graph = None
+        self._drift_leak_df = None
         self._history.clear()
 
     # ------------------------------------------------------------------ #
@@ -705,6 +738,82 @@ class Vassoura:
         removed = result.get("removed", [])
         if removed:
             self._drop(removed, reason=f"graph_cut>{thr}")
+
+    def _apply_psi_stability(self) -> None:
+        if "date_col_stability" not in self.date_cols:
+            warnings.warn("psi_stability skipped – 'stability' date col ausente.")
+            return
+        params = {
+            "date_col": "date_col_stability",
+            "window": ("2024-01", "2025-01"),
+            "psi_thr": self.thresholds.get("psi_stability", 0.25),
+        }
+        result = psi_stability(
+            self.df_current, keep_cols=list(self.keep_cols), **params
+        )
+        self._psi_series = result.get("artefacts")
+        self._drop(result.get("removed", []), reason=f"psi>{params['psi_thr']}")
+
+    def _apply_ks_separation(self) -> None:
+        if self.target_col is None:
+            warnings.warn("ks_separation skipped: target_col not provided.")
+            return
+        thr = self.thresholds.get("ks_separation", 0.05)
+        result = ks_separation(
+            self.df_current,
+            target_col=self.target_col,
+            ks_thr=thr,
+            keep_cols=list(self.keep_cols),
+        )
+        self._ks_series = result.get("artefacts")
+        self._drop(result.get("removed", []), reason=f"ks<{thr}")
+
+    def _apply_perm_importance_lgbm(self) -> None:
+        if self.target_col is None:
+            warnings.warn("perm_importance_lgbm skipped: target_col not provided.")
+            return
+        thr = self.thresholds.get("perm_importance", 0.2)
+        result = perm_importance_lgbm(
+            self.df_current,
+            target_col=self.target_col,
+            drop_lowest=thr,
+            keep_cols=list(self.keep_cols),
+        )
+        self._perm_series = result.get("artefacts")
+        self._drop(result.get("removed", []), reason=f"perm_imp<{thr}")
+
+    def _apply_partial_corr_cluster(self) -> None:
+        thr = self.thresholds.get("partial_corr_cluster", 0.6)
+        result = partial_corr_cluster(
+            self._df_for_analysis(),
+            corr_thr=thr,
+            keep_cols=list(self.keep_cols),
+        )
+        self._partial_graph = result.get("artefacts")
+        self._drop(result.get("removed", []), reason=f"partial_corr>{thr}")
+
+    def _apply_drift_vs_target_leakage(self) -> None:
+        if not self.date_cols:
+            warnings.warn("drift_vs_target_leakage skipped – sem date_col")
+            return
+        if self.target_col is None:
+            warnings.warn("drift_vs_target_leakage skipped – target_col ausente")
+            return
+        drift_thr = self.thresholds.get("drift_leak_drift", 0.3)
+        leak_thr = self.thresholds.get("drift_leak_leak", 0.5)
+        result = drift_vs_target_leakage(
+            self.df_current,
+            date_col=self.date_cols[0],
+            target_col=self.target_col,
+            drift_thr=drift_thr,
+            leak_thr=leak_thr,
+            keep_cols=list(self.keep_cols),
+        )
+        self._drift_leak_df = result.get("artefacts")
+        self._drop(
+            result.get("removed", []),
+            reason=f"drift>{drift_thr}&leak>{leak_thr}",
+        )
 
     # ------------------------------------------------------------------ #
     # Helpers                                                            #

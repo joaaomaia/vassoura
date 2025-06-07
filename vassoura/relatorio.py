@@ -187,6 +187,11 @@ def generate_report(
         vif_before = precomputed.get("vif_before")
         corr_after = precomputed.get("corr_after")
         vif_after = precomputed.get("vif_after")
+        psi_series = precomputed.get("psi_series")
+        ks_series = precomputed.get("ks_series")
+        perm_series = precomputed.get("perm_series")
+        partial_graph = precomputed.get("partial_graph")
+        drift_leak_df = precomputed.get("drift_leak_df")
         id_cols = precomputed.get("id_cols", id_cols or [])
         date_cols = precomputed.get("date_cols", date_cols or [])
         ignore_cols = precomputed.get("ignore_cols", ignore_cols or [])
@@ -198,6 +203,11 @@ def generate_report(
         vif_before = None
         corr_after = None
         vif_after = None
+        psi_series = None
+        ks_series = None
+        perm_series = None
+        partial_graph = None
+        drift_leak_df = None
         id_cols = id_cols or []
         date_cols = date_cols or []
         ignore_cols = ignore_cols or []
@@ -461,11 +471,41 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             html += "<p><i>Nenhuma variável removida; VIF estava dentro do limiar definido.</i></p>\n"
         html += "</div>\n"
 
+        if psi_series is not None:
+            html += "<div class=\"section\" id=\"psi\">"
+            html += "<h2>5. Estabilidade Temporal (PSI)</h2>"
+            html += psi_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
+            html += "</div>\n"
+
+        if ks_series is not None:
+            html += "<div class=\"section\" id=\"ks\">"
+            html += "<h2>6. KS Separation</h2>"
+            html += ks_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
+            html += "</div>\n"
+
+        if perm_series is not None:
+            html += "<div class=\"section\" id=\"perm\">"
+            html += "<h2>7. Permutation Importance</h2>"
+            html += perm_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
+            html += "</div>\n"
+
+        if partial_graph is not None:
+            html += "<div class=\"section\" id=\"partial\">"
+            html += "<h2>8. Partial Correlation Cluster</h2>"
+            html += f"<p>{len(partial_graph.nodes())} variáveis no vertex cover.</p>"
+            html += "</div>\n"
+
+        if drift_leak_df is not None:
+            html += "<div class=\"section\" id=\"drift\">"
+            html += "<h2>9. Drift vs Target Leakage</h2>"
+            html += drift_leak_df.to_html(classes="audit", float_format="{:.3f}".format)
+            html += "</div>\n"
+
         # Seção de variáveis removidas
         html += textwrap.dedent(
             f"""
             <div class="section">
-                <h2>5. Variáveis Removidas</h2>
+                <h2>10. Variáveis Removidas</h2>
                 <ul>
             """
         )
@@ -524,7 +564,22 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             ## 4. VIF Após a Limpeza
             {vif_after.to_markdown(index=False) if vif_after is not None else '*Nenhuma variável removida*'}
 
-            ## 5. Variáveis Removidas
+            ## 5. Estabilidade Temporal (PSI)
+            {psi_series.to_markdown() if psi_series is not None else '*não calculado*'}
+
+            ## 6. KS Separation
+            {ks_series.to_markdown() if ks_series is not None else '*não calculado*'}
+
+            ## 7. Permutation Importance
+            {perm_series.to_markdown() if perm_series is not None else '*não calculado*'}
+
+            ## 8. Partial Correlation Cluster
+            {len(partial_graph.nodes()) if partial_graph is not None else 0} variáveis no vertex cover
+
+            ## 9. Drift vs Target Leakage
+            {drift_leak_df.to_markdown() if drift_leak_df is not None else '*não calculado*'}
+
+            ## 10. Variáveis Removidas
             {', '.join(dropped_cols) or '*nenhuma*'}
             """
         )
