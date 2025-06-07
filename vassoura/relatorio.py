@@ -7,7 +7,7 @@ Gera relatórios interativos contendo:
     * Heat-maps de correlação (antes e após limpeza) com e sem target
     * Gráficos de barras horizontais do VIF (antes e após limpeza)
     * Seção de autocorrelação em painel (opcional)
-    * Lista de variáveis removidas
+    * Audit trail das variáveis removidas
     * Detecção de variáveis numéricas/categóricas
     * Indicação automática do método de correlação utilizado
 
@@ -39,13 +39,6 @@ from .vif import compute_vif
 __all__ = ["generate_report"]
 
 LOGGER = logging.getLogger("vassoura")
-
-os.environ.setdefault("LIGHTGBM_DISABLE_STDERR_REDIRECT", "1")
-warnings.filterwarnings("ignore", message="No further splits with positive gain")
-warnings.filterwarnings(
-    "ignore",
-    message="LightGBM binary classifier with TreeExplainer shap values output has changed",
-)
 
 
 def _fig_to_base64(fig: plt.Figure, *, fmt: str = "png") -> str:
@@ -160,6 +153,16 @@ def generate_report(
         Caminho do arquivo gerado.
     """
     output_path = Path(output_path)
+
+    import os, warnings
+    os.environ["LIGHTGBM_DISABLE_STDERR_REDIRECT"] = "1"
+    warnings.filterwarnings("ignore", message="No further splits with positive gain")
+    warnings.filterwarnings(
+        "ignore",
+        message="LightGBM binary classifier with TreeExplainer shap values output has changed",
+    )
+    from lightgbm import LGBMClassifier
+    import shap
 
     # 1) Detecção de tipos de coluna
     num_cols, cat_cols = search_dtypes(
@@ -362,9 +365,9 @@ def generate_report(
 
     # 8) Shadow-Feature Analysis (KS + SHAP)
     if target_col is not None:
-        if "shadow" not in df_clean.columns:
+        if "__shadow__" not in df_clean.columns:
             np.random.seed(0)
-            df_clean["shadow"] = np.random.rand(len(df_clean))
+            df_clean["__shadow__"] = np.random.rand(len(df_clean))
 
         def _compute_ks(s: pd.Series, target: pd.Series, n_bins: int = 10) -> float:
             if s.dtype.kind in "bifc" and s.nunique() > 1:
@@ -381,27 +384,16 @@ def generate_report(
             cdf_bad = tab[1].cumsum() / tab[1].sum()
             return float((cdf_good - cdf_bad).abs().max())
 
-        ks_vals = {}
-        cols_ks = [
+        cols_eval = [
             c
-            for c in df_clean.columns.drop(target_col)
-            if c not in set(id_cols or []) and c not in set(date_cols or [])
+            for c in df_clean.columns
+            if c not in {target_col, *(id_cols or []), *(date_cols or [])}
         ]
-        for col in cols_ks:
-            ks_vals[col] = _compute_ks(df_clean[col], df_clean[target_col])
-        ks_s = pd.Series(ks_vals).sort_values(ascending=False)
-        fig_ks, ax = plt.subplots(figsize=(8, 0.4 * len(ks_s) + 1))
-        pal = sns.color_palette("flare", len(ks_s))
-        sns.barplot(y=ks_s.index, x=ks_s.values, palette=pal, orient="h", ax=ax)
-        idx_shadow = ks_s.index.get_loc("shadow")
-        ax.patches[idx_shadow].set_edgecolor("#e63946")
-        ax.patches[idx_shadow].set_linewidth(3)
-        ax.set_title("KS por feature (shadow destacado)")
-        img_ks_shadow = _fig_to_base64(fig_ks)
+        ks_s = pd.Series({col: _compute_ks(df_clean[col], df_clean[target_col]) for col in cols_eval})
+        ks_s = ks_s.sort_values(ascending=False)
 
-        from lightgbm import LGBMClassifier
-        import shap
-
+        X = df_clean[cols_eval]
+        X = X.apply(lambda s: s.astype("category") if s.dtype == "object" else s)
         model = LGBMClassifier(
             n_estimators=300,
             learning_rate=0.1,
@@ -411,25 +403,27 @@ def generate_report(
             random_state=0,
             class_weight="balanced",
             verbosity=-1,
-        ).fit(df_clean.drop(columns=target_col), df_clean[target_col])
+        ).fit(X, df_clean[target_col])
 
         expl = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
-        shap_vals = expl.shap_values(df_clean.drop(columns=target_col))
+        shap_vals = expl.shap_values(X)
         shap_arr = shap_vals[1] if isinstance(shap_vals, list) else shap_vals
-        shap_gain = pd.Series(
-            np.abs(shap_arr).mean(0),
-            index=df_clean.drop(columns=target_col).columns,
-        )
-        shap_gain = shap_gain.drop(list(id_cols or []) + list(date_cols or []), errors="ignore")
-        shap_gain = shap_gain.sort_values(ascending=False)
+        shap_gain = pd.Series(np.abs(shap_arr).mean(0), index=X.columns).sort_values(ascending=False)
 
-        fig_shap, ax = plt.subplots(figsize=(8, 0.4 * len(shap_gain) + 1))
-        pal2 = sns.color_palette("flare", len(shap_gain))
-        for i, (feat, val) in enumerate(shap_gain.items()):
-            color = "#e63946" if feat == "shadow" else pal2[i]
-            ax.barh(feat, val, color=color)
-        ax.set_title("SHAP Gain (shadow destacado)")
-        img_shap_shadow = _fig_to_base64(fig_shap)
+        fig_shadow, (ax_ks, ax_shap) = plt.subplots(
+            ncols=2,
+            sharey=True,
+            figsize=(12, 0.4 * max(len(ks_s), 1) + 1),
+        )
+        pal = sns.color_palette("flare", len(ks_s))
+        ks_df = ks_s.reset_index().rename(columns={"index": "feature", 0: "ks"})
+        sns.barplot(data=ks_df, y="feature", x="ks", hue="feature", legend=False, palette=pal, orient="h", ax=ax_ks)
+        ax_ks.set_title("KS")
+        shap_df = shap_gain.reset_index().rename(columns={"index": "feature", 0: "gain"})
+        sns.barplot(data=shap_df, y="feature", x="gain", hue="feature", legend=False, palette=pal, orient="h", ax=ax_shap)
+        ax_shap.set_title("SHAP Gain")
+        fig_shadow.tight_layout()
+        img_shadow_pair = _fig_to_base64(fig_shadow)
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -611,10 +605,8 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 "<div class=\"section\" id=\"shadow\">"
                 "<h2>10. Shadow-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
-                f"<div style='display:flex;gap:20px;flex-wrap:wrap'>"
-                f"<div><h3>KS comparativo</h3><img src='{img_ks_shadow}' alt='KS shadow'></div>"
-                f"<div><h3>SHAP Gain comparativo</h3><img src='{img_shap_shadow}' alt='SHAP shadow'></div>"
-                "</div></div>\n"
+                f"<img src='{img_shadow_pair}' alt='KS &amp; SHAP comparativo'>"
+                "</div>\n"
             )
 
         html += "</body></html>\n"

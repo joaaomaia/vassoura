@@ -37,4 +37,4 @@ def test_generate_report_modern(tmp_path):
     assert html.count("<div class=\"vif-grid\">") == 1
     assert "KS Separation" not in html
     assert "flare_" in html
-    assert "shadow" in sess.df_current.columns
+    assert "__shadow__" in sess.df_current.columns
