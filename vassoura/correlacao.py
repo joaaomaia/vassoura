@@ -165,17 +165,19 @@ def compute_corr_matrix(
             except ImportError as exc:
                 raise ImportError("engine='dask' requer dask instalado") from exc
             data_dd = dd.from_pandas(data, npartitions=4)
-            corr = data_dd.corr(method=method).compute()
+            if method == "pearson":
+                corr = data_dd.corr(method="pearson").compute()
+            else:
+                corr = data.corr(method=method)
         elif engine == "polars":
             try:
                 import polars as pl
             except ImportError as exc:
                 raise ImportError("engine='polars' requer polars instalado") from exc
-            if method != "pearson":
-                raise ValueError(
-                    "engine='polars' suporta apenas o método 'pearson' para correlação"
-                )
-            corr = pl.from_pandas(data).corr().to_pandas()
+            if method == "pearson":
+                corr = pl.from_pandas(data).corr().to_pandas()
+            else:
+                corr = data.corr(method=method)
         else:
             corr = data.corr(method=method)
         if verbose:
