@@ -375,6 +375,9 @@ class Vassoura:
         low_iv = self._iv_series[self._iv_series < thr].index.tolist()
         if low_iv:
             self._drop(low_iv, reason=f"iv<{thr}")
+        else:
+            # Log execução mesmo sem remoções para manter histórico consistente
+            self._history.append({"cols": [], "reason": f"iv<{thr}"})
 
     def _apply_importance(self) -> None:
         if self.target_col is None:
