@@ -99,6 +99,7 @@ pyproject.toml             # Configuração do projeto
 * Calcula **Variance Inflation Factor** para variáveis numéricas. Usa `statsmodels` se disponível, ou *fallback* NumPy.
 * Remove iterativamente variáveis que excedem o limiar `vif_threshold`, preservando colunas-chave (`keep_cols`).
 * **Suporte opcional a Dask/Polars** passando `engine="dask"` ou `engine="polars"`.
+* Linhas com valores NaN ou infinitos são descartadas antes do cálculo de VIF.
 * Heurísticas extras: `importance` (XGBoost/SHAP) e `graph_cut` para correlações complexas.
 
 ### 4. Limpeza Combinada (`clean`)
