@@ -69,15 +69,14 @@ def _plot_vif_barplot(
     """
     vif_s = vif_s.sort_values(ascending=False)
     if len(vif_s) > 30:
-        others_val = float(vif_s.iloc[25:].mean())
-        vif_s = pd.concat([vif_s.iloc[:25], pd.Series({"others": others_val})])
+        others_val = float(vif_s.iloc[30:].mean())
+        vif_s = pd.concat([vif_s.iloc[:30], pd.Series({"others": others_val})])
 
     n = len(vif_s)
     df_plot = vif_s.reset_index()
     df_plot.columns = ["feature", "vif"]
 
-    pal = sns.color_palette("flare", n)
-    pal = ["#dc3545" if v > thr else c for v, c in zip(df_plot["vif"], pal)]
+    pal = sns.color_palette("viridis", n)
 
     sns.barplot(
         data=df_plot,
@@ -396,36 +395,29 @@ def generate_report(
 
     series_before = vif_before_s.sort_values(ascending=False)
     if len(series_before) > 30:
-        others_b = float(series_before.iloc[25:].mean())
+        others_b = float(series_before.iloc[30:].mean())
         series_before = pd.concat(
-            [series_before.iloc[:25], pd.Series({"others": others_b})]
+            [series_before.iloc[:30], pd.Series({"others": others_b})]
         )
 
     series_after = vif_after_s.sort_values(ascending=False)
     if len(series_after) > 30:
-        others_a = float(series_after.iloc[25:].mean())
+        others_a = float(series_after.iloc[30:].mean())
         series_after = pd.concat(
-            [series_after.iloc[:25], pd.Series({"others": others_a})]
+            [series_after.iloc[:30], pd.Series({"others": others_a})]
         )
 
     n_before = len(series_before)
-    n_after = (
-        len(series_after) if not (vif_after_s[vif_after_s > vif_threshold].empty) else 1
-    )
+    n_after = len(series_after)
 
     fig_vif, (ax_l, ax_r) = plt.subplots(
         ncols=2,
         sharey=True,
-        figsize=(10, 0.25 * max(n_before, n_after) + 1),
+        figsize=(12, 0.25 * max(n_before, n_after) + 1),
     )
 
     _plot_vif_barplot(series_before, "VIF antes da limpeza", ax_l, thr=vif_threshold)
-
-    if vif_after_s[vif_after_s > vif_threshold].empty:
-        ax_r.axis("off")
-        ax_r.text(0.5, 0.5, "Nenhum VIF acima do limite", ha="center", va="center")
-    else:
-        _plot_vif_barplot(series_after, "VIF após a limpeza", ax_r, thr=vif_threshold)
+    _plot_vif_barplot(series_after, "VIF após a limpeza", ax_r, thr=vif_threshold)
 
     fig_vif.tight_layout(w_pad=1)
     img_vif_pair = _fig_to_base64(fig_vif)
