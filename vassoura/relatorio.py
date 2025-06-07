@@ -60,37 +60,59 @@ def _pick_text_color(rgb: tuple[float, float, float]) -> str:
     return "#000" if lum > 0.6 else "#fff"
 
 
-def _plot_vif_barplot(vif_s: pd.Series, title: str, ax: plt.Axes) -> None:
-    """Barplot de VIF com paleta *flare* e rótulos contrastantes."""
-    pal = sns.color_palette("flare", len(vif_s))
+def _plot_vif_barplot(
+    vif_s: pd.Series, title: str, ax: plt.Axes, thr: float = 5.0
+) -> int:
+    """Barplot de VIF compacto com cores de alerta e rótulos externos.
+
+    Retorna o número de barras exibidas para cálculo de ``figsize``.
+    """
+    vif_s = vif_s.sort_values(ascending=False)
+    if len(vif_s) > 30:
+        others_val = float(vif_s.iloc[25:].mean())
+        vif_s = pd.concat([vif_s.iloc[:25], pd.Series({"others": others_val})])
+
+    n = len(vif_s)
     df_plot = vif_s.reset_index()
     df_plot.columns = ["feature", "vif"]
+
+    pal = sns.color_palette("flare", n)
+    pal = ["#dc3545" if v > thr else c for v, c in zip(df_plot["vif"], pal)]
 
     sns.barplot(
         data=df_plot,
         y="feature",
         x="vif",
-        hue="feature",
         palette=pal,
         legend=False,
-        dodge=False,
         orient="h",
         ax=ax,
     )
 
-    ax.set_title(title)
+    ax.axvline(thr, linestyle="--", color="grey", linewidth=1)
+    ax.set_title(f"{title} (n = {n})")
+    ax.set_xlabel("VIF")
+
+    labels = list(df_plot["feature"])
+    if n > 25:
+        labels = [textwrap.shorten(str(l), width=12, placeholder="…") for l in labels]
+        ax.set_yticklabels(labels, fontsize=8, rotation=45, ha="right")
+    else:
+        ax.set_yticklabels(labels, fontsize=8)
+
+    max_v = df_plot["vif"].max()
     for bar, val in zip(ax.patches, df_plot["vif"]):
-        txt_col = _pick_text_color(bar.get_facecolor()[:3])
+        fmt = "{:.1f}" if val < 100 else "{:.0f}"
         ax.text(
-            val * 0.01,
+            val + 0.02 * max_v,
             bar.get_y() + bar.get_height() / 2,
-            f"{val:.1f}",
+            fmt.format(val),
             va="center",
             ha="left",
-            color=txt_col,
-            fontweight="bold",
+            fontsize=8,
         )
-    ax.set_xlabel("VIF")
+
+    return n
 
 
 def generate_report(
@@ -371,14 +393,41 @@ def generate_report(
         if vif_after is not None
         else pd.Series(dtype=float)
     )
+
+    series_before = vif_before_s.sort_values(ascending=False)
+    if len(series_before) > 30:
+        others_b = float(series_before.iloc[25:].mean())
+        series_before = pd.concat(
+            [series_before.iloc[:25], pd.Series({"others": others_b})]
+        )
+
+    series_after = vif_after_s.sort_values(ascending=False)
+    if len(series_after) > 30:
+        others_a = float(series_after.iloc[25:].mean())
+        series_after = pd.concat(
+            [series_after.iloc[:25], pd.Series({"others": others_a})]
+        )
+
+    n_before = len(series_before)
+    n_after = (
+        len(series_after) if not (vif_after_s[vif_after_s > vif_threshold].empty) else 1
+    )
+
     fig_vif, (ax_l, ax_r) = plt.subplots(
         ncols=2,
         sharey=True,
-        figsize=(12, 0.30 * max(len(vif_before_s), 1) + 1),
+        figsize=(10, 0.25 * max(n_before, n_after) + 1),
     )
-    _plot_vif_barplot(vif_before_s, "VIF antes", ax_l)
-    _plot_vif_barplot(vif_after_s, "VIF após", ax_r)
-    fig_vif.tight_layout(w_pad=2)
+
+    _plot_vif_barplot(series_before, "VIF antes da limpeza", ax_l, thr=vif_threshold)
+
+    if vif_after_s[vif_after_s > vif_threshold].empty:
+        ax_r.axis("off")
+        ax_r.text(0.5, 0.5, "Nenhum VIF acima do limite", ha="center", va="center")
+    else:
+        _plot_vif_barplot(series_after, "VIF após a limpeza", ax_r, thr=vif_threshold)
+
+    fig_vif.tight_layout(w_pad=1)
     img_vif_pair = _fig_to_base64(fig_vif)
 
     # 8) Shadow-Feature Analysis
@@ -629,7 +678,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             f"""
             <div class="section" id="vif">
                 <h2>Variance Inflation Factor (VIF)</h2>
-                <div class="vif-grid"><img src="{img_vif_pair}" alt="VIF antes vs após"></div>
+                <div class="vif-grid"><img src="{img_vif_pair}" alt="VIF antes vs após" style="max-width:100%;height:auto"></div>
             </div>
             """
         )
@@ -673,13 +722,24 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
 
             html += '<div class="section" id="audit">'
             html += "<h2>Audit Trail: Colunas Removidas</h2>"
-            html += '<table class="audit"><thead><tr><th>Colunas</th><th>Heurística</th><th>Motivo</th></tr></thead><tbody>'
+            html += '<table class="audit"><thead><tr><th>Heurística</th><th>Motivo</th><th>Colunas</th></tr></thead><tbody>'
             for step in history:
                 if not step.get("cols"):
                     continue
-                cols = ", ".join(step["cols"])
+                cols_sorted = sorted(step["cols"])
                 heur, mot = _split_reason(step.get("reason", ""))
-                html += f"<tr><td>{cols}</td><td>{heur}</td><td>{mot}</td></tr>"
+                html += (
+                    f"<tr><td>{heur}</td><td>{mot}</td><td><div class='feature-grid'>"
+                )
+                for col in cols_sorted:
+                    tipo = (
+                        "num"
+                        if col in num_cols
+                        else "cat" if col in cat_cols else "unk"
+                    )
+                    badge = f" <span class='badge {tipo}'>{tipo if tipo!='unk' else 'unk'}</span>"
+                    html += f"<div>{col}{badge}</div>"
+                html += "</div></td></tr>"
             html += "</tbody></table></div>"
 
         if target_col is not None:

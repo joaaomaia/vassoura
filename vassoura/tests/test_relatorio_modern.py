@@ -20,21 +20,29 @@ def _make_df(n=120):
 
 def test_generate_report_modern(tmp_path):
     df = _make_df()
-    sess = vs.Vassoura(df, target_col="target", heuristics=["corr", "vif"], verbose="none")
+    sess = vs.Vassoura(
+        df, target_col="target", heuristics=["corr", "vif"], verbose="none"
+    )
     sess.run(recompute=True)
-    with patch("lightgbm.LGBMClassifier") as MockLGBM, patch(
-        "shap.TreeExplainer"
-    ) as MockExpl:
+    with (
+        patch("lightgbm.LGBMClassifier") as MockLGBM,
+        patch("shap.TreeExplainer") as MockExpl,
+    ):
         MockLGBM.return_value.fit.return_value = MockLGBM.return_value
-        MockExpl.return_value.shap_values.return_value = [np.zeros((len(df), 63)), np.zeros((len(df), 63))]
+        MockExpl.return_value.shap_values.return_value = [
+            np.zeros((len(df), 63)),
+            np.zeros((len(df), 63)),
+        ]
         path = Path(sess.generate_report(path=tmp_path / "r.html"))
         assert MockLGBM.call_args[1]["class_weight"] == "balanced"
     html = path.read_text()
     import re
 
-    m = re.search(r'<div class="vif-grid"><img src="data:image/[^;]+;base64,([^" ]+)', html)
-    assert m and len(m.group(1)) > 100000
-    assert html.count("<div class=\"vif-grid\">") == 1
+    m = re.search(
+        r'<div class="vif-grid"><img src="data:image/[^;]+;base64,([^" ]+)', html
+    )
+    assert m and len(m.group(1)) > 20000
+    assert html.count('<div class="vif-grid">') == 1
     assert "KS Separation" not in html
     assert "flare_" in html
     assert "__shadow__" in sess.df_current.columns
