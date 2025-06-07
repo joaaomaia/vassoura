@@ -148,8 +148,11 @@ def generate_report(
     id_cols, date_cols, ignore_cols : list[str] | None
         Listas de colunas identificadoras, de data e ignoradas para exibir
         no painel-resumo.
-    history : list[dict] | None
-        Registro de remoções, usado na tabela de audit trail.
+    history : list[dict] | dict | None
+        Registro de remoções usado na tabela de audit trail. Para
+        retrocompatibilidade, aceita-se também um dicionário contendo
+        chaves como ``"history"``, ``"ks"`` e afins, tal qual versões
+        antigas da biblioteca.
 
     Retorna
     -------
@@ -223,6 +226,13 @@ def generate_report(
         date_cols = date_cols or []
         ignore_cols = ignore_cols or []
         history = history or []
+
+    if isinstance(history, dict):
+        ks_series = history.get("ks", ks_series)
+        perm_series = history.get("perm", perm_series)
+        psi_series = history.get("psi", psi_series)
+        drift_leak_df = history.get("drift_leak_df", drift_leak_df)
+        history = history.get("history", history.get("steps", []))
 
     # 3) Cálculo de correlação ANTES da limpeza
     if corr_before is None:
