@@ -22,7 +22,7 @@ import io
 import logging
 import textwrap
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -58,13 +58,15 @@ def _plot_vif_barplot(vif_df: pd.DataFrame, title: str) -> plt.Figure:
     ax.set_ylabel("Variável")
 
     # Adiciona rótulo de valor em cada barra
-    for i, row in vif_df.sort_values("vif", ascending=True).reset_index(drop=True).iterrows():
+    for i, row in (
+        vif_df.sort_values("vif", ascending=True).reset_index(drop=True).iterrows()
+    ):
         ax.text(
             row["vif"] + 0.02 * vif_df["vif"].max(),
             i,
             f"{row['vif']:.2f}",
             va="center",
-            fontsize=9
+            fontsize=9,
         )
 
     plt.tight_layout()
@@ -91,6 +93,7 @@ def generate_report(
     heatmap_base_size: float = 0.6,
     verbose: bool = True,
     style: str = "html",  # "html" | "md"
+    precomputed: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Gera relatório de correlação/multicolinearidade e grava em output_path.
@@ -160,61 +163,103 @@ def generate_report(
                 "portanto Spearman é mais adequado para correlação."
             )
         else:  # cramer
-            justificativa = (
-                "<b>A maioria das variáveis é categórica</b>, portanto Cramér-V é usado para medir associação."
-            )
+            justificativa = "<b>A maioria das variáveis é categórica</b>, portanto Cramér-V é usado para medir associação."
         metodo_texto = f"Método de correlação selecionado: <b>{corr_method_eff.capitalize()}</b>. {justificativa}"
     else:
         corr_method_eff = corr_method
-        metodo_texto = f"Método de correlação especificado: <b>{corr_method_eff.capitalize()}</b>."
+        metodo_texto = (
+            f"Método de correlação especificado: <b>{corr_method_eff.capitalize()}</b>."
+        )
+
+    if precomputed is not None:
+        df_clean = precomputed.get("df_clean", df.copy())
+        dropped_cols = precomputed.get("dropped_cols", [])
+        corr_before = precomputed.get("corr_before")
+        vif_before = precomputed.get("vif_before")
+        corr_after = precomputed.get("corr_after")
+        vif_after = precomputed.get("vif_after")
+    else:
+        df_clean = None
+        dropped_cols = []
+        corr_before = None
+        vif_before = None
+        corr_after = None
+        vif_after = None
 
     # 3) Cálculo de correlação ANTES da limpeza
-    df_corr_source = df.copy()
-    if target_col and target_col in df_corr_source:
-        df_corr_source = df_corr_source.drop(columns=[target_col])
-
-    corr_before = compute_corr_matrix(
-        df_corr_source,
-        method=corr_method_eff,
-        target_col=None,
-        include_target=False,
-        limite_categorico=limite_categorico,
-        force_categorical=force_categorical,
-        remove_ids=remove_ids,
-        id_patterns=id_patterns,
-        verbose=verbose,
-    )
+    if corr_before is None:
+        df_corr_source = df.copy()
+        if target_col and target_col in df_corr_source:
+            df_corr_source = df_corr_source.drop(columns=[target_col])
+        corr_before = compute_corr_matrix(
+            df_corr_source,
+            method=corr_method_eff,
+            target_col=None,
+            include_target=False,
+            limite_categorico=limite_categorico,
+            force_categorical=force_categorical,
+            remove_ids=remove_ids,
+            id_patterns=id_patterns,
+            verbose=verbose,
+        )
 
     # 4) Cálculo de VIF ANTES da limpeza (nunca inclui target)
-    vif_before = compute_vif(
-        df,
-        target_col=target_col,
-        include_target=False,
-        limite_categorico=limite_categorico,
-        force_categorical=force_categorical,
-        remove_ids=remove_ids,
-        id_patterns=id_patterns,
-        verbose=verbose,
-    )
+    if vif_before is None:
+        vif_before = compute_vif(
+            df,
+            target_col=target_col,
+            include_target=False,
+            limite_categorico=limite_categorico,
+            force_categorical=force_categorical,
+            remove_ids=remove_ids,
+            id_patterns=id_patterns,
+            verbose=verbose,
+        )
 
     # 5) Limpeza propriamente dita (corr + VIF)
-    df_clean, dropped_cols, corr_after, vif_after = clean(
-        df,
-        target_col=target_col,
-        include_target=False,
-        corr_threshold=corr_threshold,
-        corr_method=corr_method_eff,
-        vif_threshold=vif_threshold,
-        keep_cols=keep_cols,
-        limite_categorico=limite_categorico,
-        force_categorical=force_categorical,
-        remove_ids=remove_ids,
-        id_patterns=id_patterns,
-        max_vif_iter=max_vif_iter,
-        n_steps=n_steps,
-        vif_n_steps=vif_n_steps,
-        verbose=verbose,
-    )
+    if df_clean is None:
+        df_clean, dropped_cols, corr_after, vif_after = clean(
+            df,
+            target_col=target_col,
+            include_target=False,
+            corr_threshold=corr_threshold,
+            corr_method=corr_method_eff,
+            vif_threshold=vif_threshold,
+            keep_cols=keep_cols,
+            limite_categorico=limite_categorico,
+            force_categorical=force_categorical,
+            remove_ids=remove_ids,
+            id_patterns=id_patterns,
+            max_vif_iter=max_vif_iter,
+            n_steps=n_steps,
+            vif_n_steps=vif_n_steps,
+            verbose=verbose,
+        )
+
+    if corr_after is None:
+        corr_after = compute_corr_matrix(
+            df_clean.drop(columns=[target_col], errors="ignore"),
+            method=corr_method_eff,
+            target_col=None,
+            include_target=False,
+            limite_categorico=limite_categorico,
+            force_categorical=force_categorical,
+            remove_ids=remove_ids,
+            id_patterns=id_patterns,
+            verbose=verbose,
+        )
+
+    if vif_after is None:
+        vif_after = compute_vif(
+            df_clean,
+            target_col=target_col,
+            include_target=False,
+            limite_categorico=limite_categorico,
+            force_categorical=force_categorical,
+            remove_ids=remove_ids,
+            id_patterns=id_patterns,
+            verbose=verbose,
+        )
 
     # 6) Gera plots para heatmaps e VIF
     # Heatmap antes da limpeza
@@ -247,16 +292,12 @@ def generate_report(
         img_corr_after = _fig_to_base64(fig_corr_after)
 
     # 7) Plots de VIF antes e após limpeza
-    fig_vif_before = _plot_vif_barplot(
-        vif_before, title="VIF antes da limpeza"
-    )
+    fig_vif_before = _plot_vif_barplot(vif_before, title="VIF antes da limpeza")
     img_vif_before = _fig_to_base64(fig_vif_before)
 
     img_vif_after = ""
     if show_final and vif_after is not None:
-        fig_vif_after = _plot_vif_barplot(
-            vif_after, title="VIF após limpeza"
-        )
+        fig_vif_after = _plot_vif_barplot(vif_after, title="VIF após limpeza")
         img_vif_after = _fig_to_base64(fig_vif_after)
 
     # 8) Montagem do relatório HTML
