@@ -33,10 +33,14 @@ def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> floa
     category grouping (categorical). Very light implementation – for
     production we may migrate to `scorecardpy` or `optbinning`.
     """
-    # Ensure target has exactly two classes to avoid building a huge crosstab
-    if target.nunique(dropna=False) != 2:
+    # Ensure target has exactly two classes
+    uniques = target.dropna().unique()
+    if len(uniques) != 2:
         warnings.warn("Target must be binary (0/1) for IV calculation.")
         return 0.0
+    # Map valores arbitrários → {0,1}
+    mapping = {uniques[0]: 0, uniques[1]: 1}
+    target_num = target.map(mapping)
 
     if series.dtype.kind in "bifc":
         # Numeric – quantile bins (duplicates handled gracefully)
@@ -48,7 +52,7 @@ def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> floa
     else:
         binned = series.astype("category")
 
-    tab = pd.crosstab(binned, target)
+    tab = pd.crosstab(binned, target_num)
     if tab.shape[1] != 2:
         warnings.warn("Target must be binary (0/1) for IV calculation.")
         return 0.0
@@ -128,6 +132,8 @@ class Vassoura:
 
         # Caches internos
         self._corr_matrix: Optional[pd.DataFrame] = None
+        self._corr_matrix_final: Optional[pd.DataFrame] = None
+        self._vif_df_before: Optional[pd.DataFrame] = None
         self._vif_df: Optional[pd.DataFrame] = None
         self._iv_series: Optional[pd.Series] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
@@ -159,6 +165,26 @@ class Vassoura:
             if func is None:
                 raise ValueError(f"Heuristic '{h}' not recognized.")
             func()
+        # Armazena correlação e VIF finais para relatórios
+        self._corr_matrix_final = compute_corr_matrix(
+            self.df_current,
+            method="auto",
+            target_col=self.target_col,
+            include_target=False,
+            engine=self.engine,
+            verbose=self.verbose,
+        )
+        if self._vif_df is None:
+            try:
+                self._vif_df = compute_vif(
+                    self.df_current,
+                    target_col=self.target_col,
+                    include_target=False,
+                    engine=self.engine,
+                    verbose=self.verbose,
+                )
+            except Exception:
+                self._vif_df = None
         return self.df_current
 
     def remove_additional(self, columns: List[str]) -> None:
@@ -166,17 +192,70 @@ class Vassoura:
         self._drop(columns, reason="manual")
 
     def generate_report(self, path: str | Path = "vassoura_report.html") -> str:
-        """Gera relatório refletindo o estado atual (caches, historials, heurísticas)."""
+        """Gera relatório utilizando caches já computados."""
+
+        if self._corr_matrix is None:
+            self._corr_matrix = compute_corr_matrix(
+                self.df_original.drop(columns=[self.target_col], errors="ignore"),
+                method="auto",
+                target_col=None,
+                include_target=False,
+                engine=self.engine,
+                verbose=self.verbose,
+            )
+
+        if self._corr_matrix_final is None:
+            self._corr_matrix_final = compute_corr_matrix(
+                self.df_current.drop(columns=[self.target_col], errors="ignore"),
+                method="auto",
+                target_col=None,
+                include_target=False,
+                engine=self.engine,
+                verbose=self.verbose,
+            )
+
+        if self._vif_df_before is None:
+            try:
+                self._vif_df_before = compute_vif(
+                    self.df_original,
+                    target_col=self.target_col,
+                    include_target=False,
+                    engine=self.engine,
+                    verbose=self.verbose,
+                )
+            except Exception:
+                self._vif_df_before = None
+
+        if self._vif_df is None:
+            try:
+                self._vif_df = compute_vif(
+                    self.df_current,
+                    target_col=self.target_col,
+                    include_target=False,
+                    engine=self.engine,
+                    verbose=self.verbose,
+                )
+            except Exception:
+                self._vif_df = None
+
+        precomputed = {
+            "df_clean": self.df_current,
+            "corr_before": self._corr_matrix,
+            "corr_after": self._corr_matrix_final,
+            "vif_before": self._vif_df_before,
+            "vif_after": self._vif_df,
+            "dropped_cols": self.dropped,
+        }
+
         return generate_report(
-            self.df_current,
+            self.df_original,
             target_col=self.target_col,
             keep_cols=list(self.keep_cols),
             corr_threshold=self.thresholds.get("corr"),
             vif_threshold=self.thresholds.get("vif"),
-            iv_threshold=self.thresholds.get("iv"),
-            heuristics=self.heuristics,
-            history=self.history,
+            verbose=self.verbose,
             output_path=path,
+            precomputed=precomputed,
         )
 
     def help(self) -> None:
@@ -193,6 +272,8 @@ class Vassoura:
         """Restaura sessão ao estado inicial (apaga caches e histórico)."""
         self.df_current = self.df_original.copy()
         self._corr_matrix = None
+        self._corr_matrix_final = None
+        self._vif_df_before = None
         self._vif_df = None
         self._iv_series = None
         self._history.clear()
@@ -260,6 +341,8 @@ class Vassoura:
                     engine=self.engine,
                     verbose=self.verbose,
                 )
+                if self._vif_df_before is None:
+                    self._vif_df_before = self._vif_df.copy()
             except Exception:
                 if self.verbose:
                     print("[Vassoura] Erro no cálculo de VIF — pulando heurística.")
