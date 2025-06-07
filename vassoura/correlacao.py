@@ -40,6 +40,7 @@ LOGGER = logging.getLogger("vassoura")
 # Helpers internos
 # ---------------------------------------------------------------------------
 
+
 def _cramers_v(x: pd.Series, y: pd.Series) -> float:
     """Calcula o Cramér‑V para duas variáveis categóricas."""
     confusion = pd.crosstab(x, y)
@@ -67,9 +68,11 @@ def _cramers_v_matrix(df_cat: pd.DataFrame) -> pd.DataFrame:
         mat[i, j] = mat[j, i] = v
     return pd.DataFrame(mat, index=cols, columns=cols)
 
+
 # ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
+
 
 def compute_corr_matrix(
     df: pd.DataFrame,
@@ -82,7 +85,9 @@ def compute_corr_matrix(
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
+    date_col: Optional[List[str]] = None,
     verbose: bool = True,
+    verbose_types: bool = False,
 ) -> pd.DataFrame:
     """Calcula matriz de correlação.
 
@@ -97,7 +102,8 @@ def compute_corr_matrix(
         ``include_target`` seja ``True``.
     include_target : bool, default False
         Inclui a coluna *target* na matriz de correlação.
-    limite_categorico, force_categorical, remove_ids, id_patterns, verbose
+    limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
+    verbose, verbose_types
         Encaminhados para ``search_dtypes``.
     engine : {"pandas", "dask", "polars"}
         Backend a ser utilizado quando possível.
@@ -108,8 +114,10 @@ def compute_corr_matrix(
         Matriz de correlação.
     """
     # Filtra colunas segundo parâmetros
-    drop_target = (target_col and not include_target)
-    df_work = df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
+    drop_target = target_col and not include_target
+    df_work = (
+        df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
+    )
 
     # Identifica tipos
     num_cols, cat_cols = search_dtypes(
@@ -119,7 +127,9 @@ def compute_corr_matrix(
         force_categorical=force_categorical,
         remove_ids=remove_ids,
         id_patterns=id_patterns,
+        date_col=date_col,
         verbose=verbose,
+        verbose_types=verbose_types,
     )
 
     # Escolha automática se necessário
@@ -130,7 +140,9 @@ def compute_corr_matrix(
 
     if method in ("pearson", "spearman"):
         if not num_cols:
-            raise ValueError("Não há colunas numéricas para calcular correlação %s" % method)
+            raise ValueError(
+                "Não há colunas numéricas para calcular correlação %s" % method
+            )
         data = df_work[num_cols].copy()
         if engine == "dask":
             try:
@@ -149,7 +161,7 @@ def compute_corr_matrix(
             corr = data.corr(method=method)
         if verbose:
             LOGGER.info(
-                "Matriz de correlação %s calculada para %d variáveis numéricas",
+                "Matriz de correlação %s calculada para %d " "variáveis numéricas",
                 method,
                 len(num_cols),
             )
@@ -161,7 +173,11 @@ def compute_corr_matrix(
         data = df_work[cat_cols].copy()
         corr = _cramers_v_matrix(data)
         if verbose:
-            LOGGER.info("Matriz de correlação Cramér‑V calculada para %d variáveis categóricas", len(cat_cols))
+            LOGGER.info(
+                "Matriz de correlação Cramér‑V calculada para %d "
+                "variáveis categóricas",
+                len(cat_cols),
+            )
         return corr
 
     raise ValueError("Método inválido: %s" % method)
@@ -170,6 +186,7 @@ def compute_corr_matrix(
 # ---------------------------------------------------------------------------
 # Visualização
 # ---------------------------------------------------------------------------
+
 
 def plot_corr_heatmap(
     corr: pd.DataFrame,
@@ -208,7 +225,9 @@ def plot_corr_heatmap(
         Objeto Axes contendo o *heat‑map*.
     """
     n_feat = len(corr)
-    figsize = figsize_from_matrix(n_feat, base=base_figsize, min_size=min_size, max_size=max_size)
+    figsize = figsize_from_matrix(
+        n_feat, base=base_figsize, min_size=min_size, max_size=max_size
+    )
 
     if ax is None:
         _, ax = plt.subplots(figsize=figsize)

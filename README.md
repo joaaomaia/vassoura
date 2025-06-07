@@ -86,7 +86,7 @@ pyproject.toml             # Configuração do projeto
 ### 1. Detecção de Tipos (`search_dtypes`)
 
 * Classifica *colunas numéricas*, *categóricas*, *booleans* e ignora *IDs* ou *datetime*.
-* Parâmetros: `target_col`, `limite_categorico`, `force_categorical`, `remove_ids`, `id_patterns`.
+* Parâmetros: `target_col`, `limite_categorico`, `force_categorical`, `remove_ids`, `id_patterns`, `date_col`, `verbose_types`.
 
 ### 2. Correlação (`compute_corr_matrix`, `plot_corr_heatmap`)
 

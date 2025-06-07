@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Vassoura – Variance Inflation Factor (VIF)
 =========================================
 
@@ -34,6 +35,7 @@ LOGGER = logging.getLogger("vassoura")
 # Funções internas auxiliares
 # ---------------------------------------------------------------------------
 
+
 def _compute_vif_np(x: np.ndarray) -> np.ndarray:
     """Calcula VIF usando operações numpy (fallback se Statsmodels ausente).
 
@@ -58,9 +60,11 @@ def _compute_vif_np(x: np.ndarray) -> np.ndarray:
             vif_vals[i] = np.inf
     return vif_vals
 
+
 # ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
+
 
 def compute_vif(
     df: pd.DataFrame,
@@ -72,34 +76,39 @@ def compute_vif(
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
+    date_col: Optional[List[str]] = None,
     verbose: bool = True,
+    verbose_types: bool = False,
 ) -> pd.DataFrame:
     """Calcula VIF para todas as colunas numéricas.
 
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        Conjunto de dados completo.
-    target_col : str | None
-        Nome da coluna *target*.
-    include_target : bool, default False
-        Considera a coluna *target* no cálculo de VIF.
-    limite_categorico, force_categorical, remove_ids, id_patterns
-        Encaminhados para ``search_dtypes``.
-    engine : {"pandas", "dask", "polars"}
-        Backend utilizado para acelerar o cálculo quando disponível.
-    verbose : bool
-        Exibe *logs*.
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Conjunto de dados completo.
+        target_col : str | None
+            Nome da coluna *target*.
+        include_target : bool, default False
+            Considera a coluna *target* no cálculo de VIF.
+        limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
+        verbose, verbose_types
+            Encaminhados para ``search_dtypes``.
+        engine : {"pandas", "dask", "polars"}
+            Backend utilizado para acelerar o cálculo quando disponível.
+        verbose : bool
+            Exibe *logs*.
 
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame com colunas ``variable`` e ``vif`` ordenado
-decrescentemente.
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame com colunas ``variable`` e ``vif`` ordenado
+    decrescentemente.
     """
     # Remove target se necessário
-    drop_target = (target_col and not include_target)
-    df_work = df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
+    drop_target = target_col and not include_target
+    df_work = (
+        df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
+    )
 
     num_cols, _ = search_dtypes(
         df_work,
@@ -108,7 +117,9 @@ decrescentemente.
         force_categorical=force_categorical,
         remove_ids=remove_ids,
         id_patterns=id_patterns,
+        date_col=date_col,
         verbose=verbose,
+        verbose_types=verbose_types,
     )
 
     if not num_cols:
@@ -171,7 +182,9 @@ def remove_high_vif(
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
     engine: str = "pandas",
+    date_col: Optional[List[str]] = None,
     verbose: bool = True,
+    verbose_types: bool = False,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame]:
     """Remove iterativamente variáveis com VIF acima do limiar.
 
@@ -189,6 +202,10 @@ def remove_high_vif(
         VIF das variáveis remanescentes.
     engine : {"pandas", "dask", "polars"}
         Backend a ser utilizado nas chamadas de ``compute_vif``.
+    date_col : list[str] | None
+        Colunas convertidas para ``datetime`` antes da detecção de tipos.
+    verbose_types : bool
+        Exibe logs detalhados de classificação de tipos.
     """
     keep_cols = keep_cols or []
     df_iter = df.copy()
@@ -207,10 +224,14 @@ def remove_high_vif(
             force_categorical=force_categorical,
             remove_ids=remove_ids,
             id_patterns=id_patterns,
+            date_col=date_col,
             verbose=verbose,
+            verbose_types=verbose_types,
         )
 
-        vif_high = vif_df[(vif_df["vif"] > vif_threshold) & (~vif_df["variable"].isin(keep_cols))]
+        vif_high = vif_df[
+            (vif_df["vif"] > vif_threshold) & (~vif_df["variable"].isin(keep_cols))
+        ]
         if vif_high.empty:
             if verbose:
                 LOGGER.info(
@@ -243,7 +264,9 @@ def remove_high_vif(
             if removed_this_iter >= step_limit:
                 break
         if verbose:
-            LOGGER.info("Iteração %d: %d variáveis removidas", iteration + 1, removed_this_iter)
+            LOGGER.info(
+                "Iteração %d: %d variáveis removidas", iteration + 1, removed_this_iter
+            )
     else:
         LOGGER.warning("Número máximo de iterações (%d) atingido", max_iter)
 
@@ -256,7 +279,9 @@ def remove_high_vif(
         force_categorical=force_categorical,
         remove_ids=remove_ids,
         id_patterns=id_patterns,
+        date_col=date_col,
         verbose=verbose,
+        verbose_types=verbose_types,
     )
 
     return df_iter, dropped, final_vif

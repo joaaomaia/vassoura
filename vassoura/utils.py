@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Vassoura — Utilities
 ======================
 
@@ -19,7 +20,9 @@ módulo ``logging``. Para visualizar, no *script* principal configure
 algo como::
 
     import logging, vassoura
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s | %(message)s"
+    )
 """
 
 import logging
@@ -51,6 +54,7 @@ if not LOGGER.handlers:
 # Funções internas auxiliares (não exportadas)
 # ---------------------------------------------------------------------------
 
+
 def _is_id_column(col_name: str, col_data: pd.Series, id_patterns: List[str]) -> bool:
     """Heurística simples para identificar colunas que provavelmente são IDs."""
     col_lower = col_name.lower()
@@ -66,14 +70,17 @@ def _remove_id_columns(
     id_patterns: List[str],
 ) -> Tuple[List[str], List[str]]:
     """Remove colunas identificadas como ID das listas *in‑place*."""
+
     def _filter(col_list: List[str]) -> List[str]:
         return [c for c in col_list if not any(p in c.lower() for p in id_patterns)]
 
     return _filter(num_cols), _filter(cat_cols)
 
+
 # ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
+
 
 def search_dtypes(
     df: pd.DataFrame,
@@ -83,7 +90,9 @@ def search_dtypes(
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
+    date_col: Optional[List[str]] = None,
     verbose: bool = True,
+    verbose_types: bool = False,
 ) -> Tuple[List[str], List[str]]:
     """Classifica as colunas de *df* em numéricas e categóricas.
 
@@ -103,8 +112,12 @@ def search_dtypes(
         Se ``True``, tenta remover colunas identificadas como IDs.
     id_patterns : list[str] | None
         Lista de *substrings* indicativas de ID (``["_id", "id_", "codigo"]``).
+    date_col : list[str] | None
+        Colunas que devem ser tratadas como ``datetime`` de forma explícita.
     verbose : bool, default True
-        Se ``True``, imprime *logs* no *logger* e também no ``stdout``.
+        Se ``True``, imprime apenas logs resumidos.
+    verbose_types : bool, default False
+        Se ``True``, exibe logs detalhados para cada coluna analisada.
 
     Returns
     -------
@@ -122,9 +135,12 @@ def search_dtypes(
 
     force_categorical = force_categorical or []
     id_patterns = id_patterns or ["_id", "id_", "codigo", "key"]
+    date_col = date_col or []
 
     # Remove target para não ser classificada
-    df_work = df.drop(columns=[target_col], errors="ignore") if target_col else df.copy()
+    df_work = (
+        df.drop(columns=[target_col], errors="ignore") if target_col else df.copy()
+    )
 
     num_cols: List[str] = []
     cat_cols: List[str] = []
@@ -132,37 +148,49 @@ def search_dtypes(
     for col in df_work.columns:
         s = df_work[col]
         try:
+            if col in date_col:
+                pd.to_datetime(s, errors="coerce")
+                if verbose_types:
+                    LOGGER.info("%s -> datetime (explicit)", col)
+                continue
+
             if col in force_categorical:
                 cat_cols.append(col)
-                if verbose:
+                if verbose_types:
                     LOGGER.info("%s -> categórica (forçada)", col)
                 continue
 
             if pd.api.types.is_numeric_dtype(s):
                 num_cols.append(col)
-                if verbose:
+                if verbose_types:
                     LOGGER.info("%s -> numérica", col)
                 continue
 
             if pd.api.types.is_bool_dtype(s):  # trata bool como categórica
                 cat_cols.append(col)
-                if verbose:
+                if verbose_types:
                     LOGGER.info("%s -> categórica (bool)", col)
                 continue
 
             if pd.api.types.is_datetime64_any_dtype(s):  # ignora datas
-                if verbose:
+                if verbose_types:
                     LOGGER.info("%s ignorada (datetime)", col)
                 continue
 
             # Colunas object / string
+            try_dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
+            if try_dt.notna().mean() > 0.8 and try_dt.notna().any():
+                if verbose_types:
+                    LOGGER.info("%s -> datetime (auto)", col)
+                continue
+
             unique_cnt = s.nunique(dropna=True)
             if unique_cnt <= limite_categorico:
                 cat_cols.append(col)
-                if verbose:
+                if verbose_types:
                     LOGGER.info("%s -> categórica (%d categorias)", col, unique_cnt)
             else:
-                if verbose:
+                if verbose_types:
                     LOGGER.info("%s ignorada (muitas categorias: %d)", col, unique_cnt)
         except Exception as exc:  # pragma: no cover
             warnings.warn(f"Falha ao processar coluna {col}: {exc}")
@@ -170,12 +198,20 @@ def search_dtypes(
     if remove_ids:
         num_cols, cat_cols = _remove_id_columns(num_cols, cat_cols, id_patterns)
 
+    if verbose:
+        LOGGER.info(
+            "Tipos detectados: %d numéricas, %d categóricas",
+            len(num_cols),
+            len(cat_cols),
+        )
+
     return num_cols, cat_cols
 
 
 # ---------------------------------------------------------------------------
 # Utilidades complementares
 # ---------------------------------------------------------------------------
+
 
 def suggest_corr_method(num_cols: List[str], cat_cols: List[str]) -> str:
     """Sugere método de correlação com base na presença de tipos.
@@ -193,7 +229,9 @@ def suggest_corr_method(num_cols: List[str], cat_cols: List[str]) -> str:
     return "pearson"  # fallback seguro
 
 
-def figsize_from_matrix(n_features: int, base: float = 0.4, *, min_size: int = 6, max_size: int = 20) -> Tuple[int, int]:
+def figsize_from_matrix(
+    n_features: int, base: float = 0.4, *, min_size: int = 6, max_size: int = 20
+) -> Tuple[int, int]:
     """Calcula *figsize* adequado para heat‑maps baseado em ``n_features``.
 
     O tamanho cresce linearmente com o número de variáveis, ficando dentro
@@ -241,10 +279,12 @@ def criar_dataset_pd_behavior(
         start = rng.choice(start_dates)
         dur = rng.integers(12, max_anos * 12 + 1)
         meses = pd.date_range(start, periods=dur, freq="MS")
-        df_cli = pd.DataFrame({
-            "NroContrato": i + 1,
-            "AnoMesReferencia": meses.strftime("%Y%m").astype(int),
-        })
+        df_cli = pd.DataFrame(
+            {
+                "NroContrato": i + 1,
+                "AnoMesReferencia": meses.strftime("%Y%m").astype(int),
+            }
+        )
         rows.append(df_cli)
 
     df = pd.concat(rows, ignore_index=True)

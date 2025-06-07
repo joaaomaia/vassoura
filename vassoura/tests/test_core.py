@@ -40,6 +40,18 @@ def test_search_dtypes():
     assert set(cat) == {"cat"}
 
 
+def test_search_dtypes_date_col():
+    df = pd.DataFrame(
+        {
+            "dt": ["2023-01-01", "2023-01-02"],
+            "val": [1, 2],
+            "target": [0, 1],
+        }
+    )
+    num, cat = vs.search_dtypes(df, target_col="target", date_col=["dt"], verbose=False)
+    assert "dt" not in num and "dt" not in cat
+
+
 # ---------------------------------------------------------------------------
 # compute_corr_matrix
 # ---------------------------------------------------------------------------
