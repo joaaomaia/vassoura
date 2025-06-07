@@ -100,3 +100,23 @@ def test_clean_fractional_steps():
     )
     assert df1.equals(df2)
     assert set(dropped1) == set(dropped2)
+
+
+def test_missing_removal():
+    df = _make_dummy_df()
+    df.loc[:50, "x3"] = np.nan
+    vsess = vs.Vassoura(
+        df,
+        target_col="target",
+        heuristics=["corr"],
+        thresholds={"missing": 0.2, "corr": 0.9},
+    )
+    df_clean = vsess.run()
+    assert "x3" not in df_clean.columns
+    assert any("missing>" in h["reason"] for h in vsess.history)
+
+
+def test_help(capsys):
+    vs.Vassoura(_make_dummy_df()).help()
+    captured = capsys.readouterr()
+    assert "Vassoura usage" in captured.out

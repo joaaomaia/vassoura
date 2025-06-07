@@ -15,6 +15,7 @@
 * **Classificar tipos de colunas** (*numéricas*, *categóricas*, *IDs*);
 * **Calcular correlação** (Pearson, Spearman, Cramér‑V) e visualizar via heat‑map dinamicamente dimensionado;
 * **Calcular VIF** (Variance Inflation Factor) usando `statsmodels` ou NumPy, e remover variáveis iterativamente conforme limiar;
+* **Descartar colunas com muitos valores ausentes** ao definir `missing_threshold` na classe `Vassoura`;
 * **Limpar multicolinearidade** combinando filtro por correlação e VIF em um único pipeline (`clean`);
 * **Analisar autocorrelação em painel** para séries temporais por contrato, agregando ACF (ACF médio, mediana, ponderado) e exibindo correlogramas;
 * **Gerar relatórios** HTML ou Markdown completos com seções de conceitos, heat‑maps, plots de VIF e autocorrelação, além de listas de variáveis removidas.

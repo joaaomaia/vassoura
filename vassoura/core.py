@@ -83,6 +83,9 @@ class Vassoura:
         `'corr'`, `'vif'`, `'iv'`, `'importance'`, `'graph_cut'`.
     thresholds : dict[str, float] | None
         Dicionário de limites por heurística, ex: `{'corr':0.9, 'vif':10, 'iv':0.02}`.
+    missing_threshold : float | None
+        Se definido, remove colunas com proporção de valores ausentes acima
+        desse limite antes das outras heurísticas.
     engine : {"pandas", "dask", "polars"}
         Backend utilizado nos cálculos pesados. ``"pandas"`` é o padrão.
     verbose : bool
@@ -97,6 +100,7 @@ class Vassoura:
         keep_cols: Optional[List[str]] = None,
         heuristics: Optional[List[str]] = None,
         thresholds: Optional[Dict[str, float]] = None,
+        missing_threshold: Optional[float] = None,
         engine: str = "pandas",
         verbose: bool = True,
     ) -> None:
@@ -110,6 +114,8 @@ class Vassoura:
         self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
         # Valores padrão, podem ser sobrescritos
         self.thresholds = {"corr": 0.9, "vif": 10.0, "iv": 0.02}
+        if missing_threshold is not None:
+            self.thresholds["missing"] = missing_threshold
         if thresholds:
             self.thresholds.update(thresholds)
 
@@ -121,6 +127,7 @@ class Vassoura:
 
         # Map heurísticas → métodos
         self._heuristic_funcs: Dict[str, Callable[[], None]] = {
+            "missing": self._apply_missing,
             "corr": self._apply_corr,
             "vif": self._apply_vif,
             "iv": self._apply_iv,
@@ -138,6 +145,8 @@ class Vassoura:
         """
         if recompute:
             self.reset()
+        if self.thresholds.get("missing") is not None:
+            self._apply_missing()
         for h in self.heuristics:
             func = self._heuristic_funcs.get(h)
             if func is None:
@@ -163,6 +172,16 @@ class Vassoura:
             output_path=path,
         )
 
+    def help(self) -> None:
+        """Imprime instruções básicas de uso da classe."""
+        msg = (
+            "Vassoura usage:\n"
+            " 1. Instancie com Vassoura(df, target_col='alvo').\n"
+            " 2. Chame run() para aplicar as heurísticas.\n"
+            " 3. Acesse o resultado em df_current ou use generate_report()."
+        )
+        print(msg)
+
     def reset(self) -> None:
         """Restaura sessão ao estado inicial (apaga caches e histórico)."""
         self.df_current = self.df_original.copy()
@@ -174,6 +193,16 @@ class Vassoura:
     # ------------------------------------------------------------------ #
     # Heurísticas                                                        #
     # ------------------------------------------------------------------ #
+    def _apply_missing(self) -> None:
+        thr = self.thresholds.get("missing")
+        if thr is None:
+            return
+        if self.verbose:
+            print(f"[Vassoura] Missing heuristic (thr>{thr})")
+        miss_ratio = self.df_current.isna().mean()
+        cols = [c for c, r in miss_ratio.items() if r > thr and c != self.target_col]
+        self._drop(cols, reason=f"missing>{thr}")
+
     def _apply_corr(self) -> None:
         thr = self.thresholds.get("corr", 0.9)
         if self.verbose:
