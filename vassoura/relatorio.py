@@ -21,14 +21,16 @@ import base64
 import io
 import logging
 import os
-import warnings
+
+os.environ["LIGHTGBM_DISABLE_STDERR_REDIRECT"] = "1"
 import textwrap
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
+import pandas as pd
 import seaborn as sns
 
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
@@ -63,7 +65,7 @@ def _plot_vif_barplot(vif_s: pd.Series, title: str, ax: plt.Axes) -> None:
     pal = sns.color_palette("flare", len(vif_s))
     df_plot = vif_s.reset_index()
     df_plot.columns = ["feature", "vif"]
-    
+
     sns.barplot(
         data=df_plot,
         y="feature",
@@ -75,7 +77,7 @@ def _plot_vif_barplot(vif_s: pd.Series, title: str, ax: plt.Axes) -> None:
         orient="h",
         ax=ax,
     )
-    
+
     ax.set_title(title)
     for bar, val in zip(ax.patches, df_plot["vif"]):
         txt_col = _pick_text_color(bar.get_facecolor()[:3])
@@ -168,15 +170,15 @@ def generate_report(
     """
     output_path = Path(output_path)
 
-    import os, warnings
-    os.environ["LIGHTGBM_DISABLE_STDERR_REDIRECT"] = "1"
+    import warnings
+
     warnings.filterwarnings("ignore", message="No further splits with positive gain")
     warnings.filterwarnings(
         "ignore",
         message="LightGBM binary classifier with TreeExplainer shap values output has changed",
     )
-    from lightgbm import LGBMClassifier
     import shap
+    from lightgbm import LGBMClassifier
 
     # 1) Detecção de tipos de coluna
     num_cols, cat_cols = search_dtypes(
@@ -365,12 +367,14 @@ def generate_report(
     # 7) Plots de VIF antes e após limpeza em uma única figura
     vif_before_s = vif_before.set_index("variable")["vif"]
     vif_after_s = (
-        vif_after.set_index("variable")["vif"] if vif_after is not None else pd.Series(dtype=float)
+        vif_after.set_index("variable")["vif"]
+        if vif_after is not None
+        else pd.Series(dtype=float)
     )
     fig_vif, (ax_l, ax_r) = plt.subplots(
         ncols=2,
         sharey=True,
-        figsize=(12, 0.45 * max(len(vif_before_s), 1) + 1),
+        figsize=(12, 0.30 * max(len(vif_before_s), 1) + 1),
     )
     _plot_vif_barplot(vif_before_s, "VIF antes", ax_l)
     _plot_vif_barplot(vif_after_s, "VIF após", ax_r)
@@ -403,7 +407,9 @@ def generate_report(
             for c in df_clean.columns
             if c not in {target_col, *(id_cols or []), *(date_cols or [])}
         ]
-        ks_s = pd.Series({col: _compute_ks(df_clean[col], df_clean[target_col]) for col in cols_eval})
+        ks_s = pd.Series(
+            {col: _compute_ks(df_clean[col], df_clean[target_col]) for col in cols_eval}
+        )
         ks_s = ks_s.sort_values(ascending=False)
 
         X = df_clean[cols_eval]
@@ -423,17 +429,22 @@ def generate_report(
         shap_vals = expl.shap_values(X)
         shap_arr = shap_vals[1] if isinstance(shap_vals, list) else shap_vals
 
-        gain_raw = getattr(getattr(model, "booster_", model), "feature_importance", lambda *a, **k: np.zeros(len(X.columns)))("gain")
+        gain_raw = getattr(
+            getattr(model, "booster_", model),
+            "feature_importance",
+            lambda *a, **k: np.zeros(len(X.columns)),
+        )("gain")
         gain_arr = np.array(gain_raw)
         if gain_arr.size != len(X.columns):
             gain_arr = np.zeros(len(X.columns))
         gain_s = pd.Series(gain_arr, index=X.columns).sort_values(ascending=False)
 
-        n_feat = max(len(cols_eval), 1)
+        n_features = len(ks_s)
         fig_shadow, (ax_shap, ax_ks, ax_imp) = plt.subplots(
             1,
             3,
-            figsize=(15, 0.4 * n_feat + 2),
+            figsize=(18, 0.35 * n_features + 2),
+            dpi=110,
         )
 
         # SHAP summary plot
@@ -490,7 +501,7 @@ def generate_report(
         )
         ax_imp.set_title("LightGBM Gain")
 
-        fig_shadow.tight_layout()
+        fig_shadow.tight_layout(w_pad=3)
         img_shadow_triplet = _fig_to_base64(fig_shadow)
 
     # 8) Montagem do relatório HTML
@@ -624,26 +635,29 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         )
 
         if psi_series is not None:
-            html += "<div class=\"section\" id=\"psi\">"
+            html += '<div class="section" id="psi">'
             html += "<h2>Estabilidade Temporal (PSI)</h2>"
-            html += psi_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
+            html += psi_series.to_frame().to_html(
+                classes="audit", float_format="{:.3f}".format
+            )
             html += "</div>\n"
 
-
         if perm_series is not None:
-            html += "<div class=\"section\" id=\"perm\">"
+            html += '<div class="section" id="perm">'
             html += "<h2>Permutation Importance</h2>"
-            html += perm_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
+            html += perm_series.to_frame().to_html(
+                classes="audit", float_format="{:.3f}".format
+            )
             html += "</div>\n"
 
         if partial_graph is not None:
-            html += "<div class=\"section\" id=\"partial\">"
+            html += '<div class="section" id="partial">'
             html += "<h2>Partial Correlation Cluster</h2>"
             html += f"<p>{len(partial_graph.nodes())} variáveis no vertex cover.</p>"
             html += "</div>\n"
 
         if drift_leak_df is not None:
-            html += "<div class=\"section\" id=\"drift\">"
+            html += '<div class="section" id="drift">'
             html += "<h2>Drift vs Target Leakage</h2>"
             html += drift_leak_df.to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
@@ -670,7 +684,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
 
         if target_col is not None:
             html += (
-                "<div class=\"section\" id=\"shadow\">"
+                '<div class="section" id="shadow">'
                 "<h2>Shadow-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
                 f"<img src='{img_shadow_triplet}' alt='SHAP · KS · LightGBM Gain'>"
