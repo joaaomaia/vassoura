@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+import os
 import warnings
 
 import pandas as pd
@@ -37,6 +38,13 @@ __all__ = [
     "partial_corr_cluster",
     "drift_vs_target_leakage",
 ]
+
+os.environ.setdefault("LIGHTGBM_DISABLE_STDERR_REDIRECT", "1")
+warnings.filterwarnings("ignore", message="No further splits with positive gain")
+warnings.filterwarnings(
+    "ignore",
+    message="LightGBM binary classifier with TreeExplainer shap values output has changed",
+)
 
 
 # --------------------------------------------------------------------- #
@@ -412,11 +420,17 @@ def perm_importance_lgbm(
     y = df[target_col]
     if y.nunique() == 2:
         model = LGBMClassifier(
-            n_estimators=n_estimators, random_state=random_state, n_jobs=-1
+            n_estimators=n_estimators,
+            random_state=random_state,
+            n_jobs=-1,
+            verbosity=-1,
         )
     else:
         model = LGBMRegressor(
-            n_estimators=n_estimators, random_state=random_state, n_jobs=-1
+            n_estimators=n_estimators,
+            random_state=random_state,
+            n_jobs=-1,
+            verbosity=-1,
         )
     model.fit(X, y)
 

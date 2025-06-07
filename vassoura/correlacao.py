@@ -308,7 +308,11 @@ def plot_corr_heatmap(
         mesh = ax.collections[0]
         norm = mesh.norm
         cmap_obj = mesh.cmap
-        for text, val in zip(ax.texts, data.flatten()):
+        for k, (text, val) in enumerate(zip(ax.texts, data.flatten())):
+            i, j = divmod(k, len(corr))
+            if i == j:
+                text.set_visible(False)
+                continue
             rgb = cmap_obj(norm(val))[:3]
             text.set_color(_pick_text_color(rgb))
 
@@ -316,6 +320,8 @@ def plot_corr_heatmap(
         thr = abs(corr_threshold)
         for i, row in enumerate(corr.index):
             for j, col in enumerate(corr.columns):
+                if i == j:
+                    continue
                 val = corr.iloc[i, j]
                 if abs(val) >= thr:
                     ax.text(
