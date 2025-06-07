@@ -12,11 +12,4 @@ vassoura/tests/test_session.py::test_iv_removal PASSED                   [ 60%]
 vassoura/tests/test_session.py::test_manual_removal PASSED               [ 80%]
 vassoura/tests/test_session.py::test_reset PASSED                        [100%]
 
-============================== warnings summary ===============================
-vassoura/tests/test_session.py::test_vif_removal
-vassoura/tests/test_session.py::test_iv_removal
-  C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\site-packages\statsmodels\stats\outliers_influence.py:197: RuntimeWarning: divide by zero encountered in scalar divide
-    vif = 1. / (1. - r_squared_i)
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 5 passed, 2 warnings in 2.06s ========================
+============================== 5 passed in 2.09s ==============================

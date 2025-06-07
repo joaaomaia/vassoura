@@ -1,9 +1,0 @@
-============================= test session starts =============================
-platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
-cachedir: .pytest_cache
-rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
-configfile: pyproject.toml
-plugins: anyio-4.9.0
-collecting ... collected 0 items
-
-============================ no tests ran in 0.00s ============================

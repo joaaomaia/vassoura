@@ -4,6 +4,10 @@ cachedir: .pytest_cache
 rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
 configfile: pyproject.toml
 plugins: anyio-4.9.0
-collecting ... collected 0 items
+collecting ... collected 3 items
 
-============================ no tests ran in 0.02s ============================
+vassoura/tests/test_correlacao.py::test_corr_matrix_pearson PASSED       [ 33%]
+vassoura/tests/test_correlacao.py::test_corr_matrix_spearman PASSED      [ 66%]
+vassoura/tests/test_correlacao.py::test_corr_matrix_auto_detect PASSED   [100%]
+
+============================== 3 passed in 2.05s ==============================

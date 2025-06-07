@@ -15,4 +15,4 @@ vassoura/tests/test_core.py::test_missing_removal PASSED                 [ 75%]
 vassoura/tests/test_core.py::test_help PASSED                            [ 87%]
 vassoura/tests/test_core.py::test_iv_skipped_when_target_not_binary PASSED [100%]
 
-============================== 8 passed in 2.04s ==============================
+============================== 8 passed in 2.27s ==============================
