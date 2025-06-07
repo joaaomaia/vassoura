@@ -571,7 +571,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 <p><strong>Multicolinearidade</strong> ocorre quando uma variável pode ser prevista (quase) perfeitamente a partir de uma combinação linear de outras variáveis. A presença de multicolinearidade alta prejudica a estabilidade e interpretação de coeficientes em modelos lineares.</p>
                 </div>
                 <div class="section" id="tipos">
-                <h2>1. Tipos de Variáveis</h2>
+                <h2>Tipos de Variáveis</h2>
                 <div class="feature-grid">
             """
         )
@@ -587,7 +587,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         html += textwrap.dedent(
             f"""
             <div class="section">
-                <h2>2. Método de Correlação</h2>
+                <h2>Método de Correlação</h2>
                 <p>{metodo_texto}</p>
             </div>
             """
@@ -597,7 +597,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         html += textwrap.dedent(
             f"""
             <div class="section" id="heatmaps">
-                <h2>3. Heatmaps de Correlação</h2>
+                <h2>Heatmaps de Correlação</h2>
                 <h3>Antes da Limpeza ({corr_method_eff.capitalize()})</h3>
                 <img src="{img_corr_before}" alt="flare_corr_antes">
             """
@@ -617,7 +617,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         html += textwrap.dedent(
             f"""
             <div class="section" id="vif">
-                <h2>4. Variance Inflation Factor (VIF)</h2>
+                <h2>Variance Inflation Factor (VIF)</h2>
                 <div class="vif-grid"><img src="{img_vif_pair}" alt="VIF antes vs após"></div>
             </div>
             """
@@ -625,26 +625,26 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
 
         if psi_series is not None:
             html += "<div class=\"section\" id=\"psi\">"
-            html += "<h2>5. Estabilidade Temporal (PSI)</h2>"
+            html += "<h2>Estabilidade Temporal (PSI)</h2>"
             html += psi_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
 
         if perm_series is not None:
             html += "<div class=\"section\" id=\"perm\">"
-            html += "<h2>6. Permutation Importance</h2>"
+            html += "<h2>Permutation Importance</h2>"
             html += perm_series.to_frame().to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
         if partial_graph is not None:
             html += "<div class=\"section\" id=\"partial\">"
-            html += "<h2>7. Partial Correlation Cluster</h2>"
+            html += "<h2>Partial Correlation Cluster</h2>"
             html += f"<p>{len(partial_graph.nodes())} variáveis no vertex cover.</p>"
             html += "</div>\n"
 
         if drift_leak_df is not None:
             html += "<div class=\"section\" id=\"drift\">"
-            html += "<h2>8. Drift vs Target Leakage</h2>"
+            html += "<h2>Drift vs Target Leakage</h2>"
             html += drift_leak_df.to_html(classes="audit", float_format="{:.3f}".format)
             html += "</div>\n"
 
@@ -658,7 +658,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 return r, ""
 
             html += '<div class="section" id="audit">'
-            html += "<h2>5. Audit trail</h2>"
+            html += "<h2>Audit Trail: Colunas Removidas</h2>"
             html += '<table class="audit"><thead><tr><th>Colunas</th><th>Heurística</th><th>Motivo</th></tr></thead><tbody>'
             for step in history:
                 if not step.get("cols"):
@@ -671,7 +671,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
         if target_col is not None:
             html += (
                 "<div class=\"section\" id=\"shadow\">"
-                "<h2>6. Shadow-Feature Analysis</h2>"
+                "<h2>Shadow-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
                 f"<img src='{img_shadow_triplet}' alt='SHAP · KS · LightGBM Gain'>"
                 "</div>\n"
