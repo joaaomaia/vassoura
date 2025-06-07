@@ -1,0 +1,18 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
+configfile: pyproject.toml
+plugins: anyio-4.9.0
+collecting ... collected 8 items
+
+vassoura/tests/test_core.py::test_search_dtypes PASSED                   [ 12%]
+vassoura/tests/test_core.py::test_compute_corr_matrix PASSED             [ 25%]
+vassoura/tests/test_core.py::test_compute_vif PASSED                     [ 37%]
+vassoura/tests/test_core.py::test_clean PASSED                           [ 50%]
+vassoura/tests/test_core.py::test_clean_fractional_steps PASSED          [ 62%]
+vassoura/tests/test_core.py::test_missing_removal PASSED                 [ 75%]
+vassoura/tests/test_core.py::test_help PASSED                            [ 87%]
+vassoura/tests/test_core.py::test_iv_skipped_when_target_not_binary PASSED [100%]
+
+============================== 8 passed in 2.14s ==============================
