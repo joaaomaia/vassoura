@@ -10,4 +10,12 @@ vassoura/tests/test_correlacao.py::test_corr_matrix_pearson PASSED       [ 33%]
 vassoura/tests/test_correlacao.py::test_corr_matrix_spearman PASSED      [ 66%]
 vassoura/tests/test_correlacao.py::test_corr_matrix_auto_detect PASSED   [100%]
 
-============================== 3 passed in 2.05s ==============================
+============================== warnings summary ===============================
+vassoura/tests/test_correlacao.py::test_corr_matrix_pearson
+vassoura/tests/test_correlacao.py::test_corr_matrix_spearman
+vassoura/tests/test_correlacao.py::test_corr_matrix_auto_detect
+  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\utils.py:216: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
+    try_dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 3 passed, 3 warnings in 2.03s ========================

@@ -4,9 +4,8 @@ cachedir: .pytest_cache
 rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
 configfile: pyproject.toml
 plugins: anyio-4.9.0
-collecting ... collected 2 items
+collecting ... collected 1 item
 
-vassoura/tests/test_limpeza.py::test_clean_removes_correlated_variable PASSED [ 50%]
-vassoura/tests/test_limpeza.py::test_clean_keeps_unrelated_variable PASSED [100%]
+vassoura/tests/test_vassoura_integration_super.py::test_vassoura_pipeline_completo PASSED [100%]
 
-============================== 2 passed in 2.01s ==============================
+============================== 1 passed in 2.96s ==============================
