@@ -4,3 +4,4 @@ seaborn>=0.13
 matplotlib>=3.8
 scipy>=1.11
 statsmodels>=0.14
+polars>=1.30.0
