@@ -47,7 +47,7 @@ test_results/
 run_all_tests.sh
 
 # Relatórios gerados
-vassoura_report.html
+#vassoura_report.html
 *.svg
 *.pdf
 

@@ -4,12 +4,13 @@ cachedir: .pytest_cache
 rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
 configfile: pyproject.toml
 plugins: anyio-4.9.0
-collecting ... collected 5 items
+collecting ... collected 6 items
 
-vassoura/tests/test_session.py::test_corr_removal PASSED                 [ 20%]
-vassoura/tests/test_session.py::test_vif_removal PASSED                  [ 40%]
-vassoura/tests/test_session.py::test_iv_removal PASSED                   [ 60%]
-vassoura/tests/test_session.py::test_manual_removal PASSED               [ 80%]
-vassoura/tests/test_session.py::test_reset PASSED                        [100%]
+vassoura/tests/test_session.py::test_corr_removal PASSED                 [ 16%]
+vassoura/tests/test_session.py::test_vif_removal PASSED                  [ 33%]
+vassoura/tests/test_session.py::test_iv_removal PASSED                   [ 50%]
+vassoura/tests/test_session.py::test_manual_removal PASSED               [ 66%]
+vassoura/tests/test_session.py::test_reset PASSED                        [ 83%]
+vassoura/tests/test_session.py::test_fractional_steps_session PASSED     [100%]
 
-============================== 5 passed in 2.09s ==============================
+============================== 6 passed in 7.84s ==============================
