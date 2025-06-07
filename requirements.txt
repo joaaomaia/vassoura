@@ -5,3 +5,4 @@ matplotlib>=3.8
 scipy>=1.11
 statsmodels>=0.14
 polars>=1.30.0
+dask>=2025.5.1
