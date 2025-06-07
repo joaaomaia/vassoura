@@ -35,7 +35,7 @@ def _make_dummy_df(n: int = 200) -> pd.DataFrame:
 
 def test_search_dtypes():
     df = _make_dummy_df()
-    num, cat = vs.search_dtypes(df, target_col="target", verbose=False)
+    num, cat = vs.search_dtypes(df, target_col="target", verbose="none")
     assert set(num) == {"x1", "x2", "x3"}
     assert set(cat) == {"cat"}
 
@@ -48,7 +48,7 @@ def test_search_dtypes_date_col():
             "target": [0, 1],
         }
     )
-    num, cat = vs.search_dtypes(df, target_col="target", date_col=["dt"], verbose=False)
+    num, cat = vs.search_dtypes(df, target_col="target", date_col=["dt"], verbose="none")
     assert "dt" not in num and "dt" not in cat
 
 
@@ -60,7 +60,7 @@ def test_search_dtypes_date_col():
 def test_compute_corr_matrix():
     df = _make_dummy_df()
     corr = vs.compute_corr_matrix(
-        df, method="pearson", target_col="target", verbose=False
+        df, method="pearson", target_col="target", verbose="none"
     )
     assert corr.shape[0] == corr.shape[1]  # quadrada
     assert "x1" in corr.columns and "x2" in corr.columns
@@ -75,7 +75,7 @@ def test_compute_corr_matrix():
 
 def test_compute_vif():
     df = _make_dummy_df()
-    vif = vs.compute_vif(df, target_col="target", verbose=False)
+    vif = vs.compute_vif(df, target_col="target", verbose="none")
     # Deve existir uma linha por variável numérica
     assert set(vif["variable"]) == {"x1", "x2", "x3"}
     # x1 ou x2 devem ter VIF alto devido à correlação
@@ -95,7 +95,7 @@ def test_clean():
         keep_cols=["x1"],
         corr_threshold=0.9,
         vif_threshold=5,
-        verbose=False,
+        verbose="none",
     )
     # 'x2' deve ser removida (alta correlação com x1) mas x1 deve permanecer
     assert "x2" in dropped
@@ -110,7 +110,7 @@ def test_clean_fractional_steps():
         keep_cols=["x1"],
         corr_threshold=0.9,
         vif_threshold=5,
-        verbose=False,
+        verbose="none",
     )
     df2, dropped2, _, _ = vs.clean(
         df,
@@ -120,7 +120,7 @@ def test_clean_fractional_steps():
         vif_threshold=5,
         n_steps=2,
         vif_n_steps=2,
-        verbose=False,
+        verbose="none",
     )
     assert df1.equals(df2)
     assert set(dropped1) == set(dropped2)

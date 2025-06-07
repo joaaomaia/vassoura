@@ -51,6 +51,41 @@ if not LOGGER.handlers:
     LOGGER.setLevel(logging.INFO)
 
 # ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+
+def parse_verbose(
+    verbose: str | bool = "basic", verbose_types: bool | None = None
+) -> tuple[bool, bool]:
+    """Converte argumentos de verbosidade em flags booleanas.
+
+    ``verbose`` aceita ``True``/``False`` ou ``"none"``, ``"basic"`` e ``"full"``.
+    Quando ``verbose_types`` é ``None``, ele é derivado do nível indicado em
+    ``verbose`` (``full`` ativa logs detalhados de tipos).
+    """
+
+    if isinstance(verbose, bool):
+        level = "basic" if verbose else "none"
+    else:
+        level = verbose.lower()
+        if level not in {"none", "basic", "full"}:
+            raise ValueError("verbose deve ser 'none', 'basic' ou 'full'")
+
+    if verbose_types is None:
+        verbose_types = level == "full"
+    verbose_flag = level != "none"
+    return verbose_flag, verbose_types
+
+
+def maybe_sample(df: pd.DataFrame, limit: int = 50000) -> pd.DataFrame:
+    """Retorna amostra do DataFrame se ele exceder ``limit`` linhas."""
+
+    if len(df) > limit:
+        return df.sample(n=limit, random_state=42)
+    return df
+
+# ---------------------------------------------------------------------------
 # Funções internas auxiliares (não exportadas)
 # ---------------------------------------------------------------------------
 

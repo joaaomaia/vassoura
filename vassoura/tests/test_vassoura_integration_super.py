@@ -38,7 +38,7 @@ def test_vassoura_pipeline_completo(tmp_path):
         keep_cols=["x1"],
         heuristics=["corr", "vif", "iv"],
         thresholds={"corr": 0.85, "vif": 5, "iv": 0.01, "missing": 0.2},
-        verbose=False
+        verbose="none"
     )
 
     df_clean = vs.run(recompute=True)
@@ -55,8 +55,12 @@ def test_vassoura_pipeline_completo(tmp_path):
     assert os.path.exists(path_gerado)
 
     # Autocorrelação da variável x1
-    acf_panel = compute_panel_acf(df, value_col="x1", time_col="AnoMes", id_col="Contrato", nlags=6, min_periods=6)
-    acf_analysis = analisar_autocorrelacao(acf_panel, feature_name="x1", verbose=False)
+    acf_panel = compute_panel_acf(
+        df, value_col="x1", time_col="AnoMes", id_col="Contrato", nlags=6, min_periods=6
+    )
+    acf_analysis = analisar_autocorrelacao(
+        acf_panel, feature_name="x1", verbose="none"
+    )
 
     # Verificações da análise de autocorrelação
     assert "acf_max" in acf_analysis

@@ -27,7 +27,13 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import chi2_contingency
 
-from .utils import figsize_from_matrix, search_dtypes, suggest_corr_method
+from .utils import (
+    figsize_from_matrix,
+    maybe_sample,
+    parse_verbose,
+    search_dtypes,
+    suggest_corr_method,
+)
 
 __all__ = [
     "compute_corr_matrix",
@@ -86,8 +92,9 @@ def compute_corr_matrix(
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
     date_col: Optional[List[str]] = None,
-    verbose: bool = True,
-    verbose_types: bool = False,
+    verbose: str | bool = "basic",
+    verbose_types: bool | None = None,
+    adaptive_sampling: bool = False,
 ) -> pd.DataFrame:
     """Calcula matriz de correlação.
 
@@ -105,6 +112,9 @@ def compute_corr_matrix(
     limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
     verbose, verbose_types
         Encaminhados para ``search_dtypes``.
+    adaptive_sampling : bool
+        Se ``True``, usa amostra de até 50k linhas para acelerar o cálculo
+        em datasets grandes.
     engine : {"pandas", "dask", "polars"}
         Backend a ser utilizado quando possível.
 
@@ -113,6 +123,9 @@ def compute_corr_matrix(
     pandas.DataFrame
         Matriz de correlação.
     """
+    # Configura verbosidade
+    verbose, verbose_types = parse_verbose(verbose, verbose_types)
+
     # Filtra colunas segundo parâmetros
     drop_target = target_col and not include_target
     df_work = (
@@ -144,6 +157,8 @@ def compute_corr_matrix(
                 "Não há colunas numéricas para calcular correlação %s" % method
             )
         data = df_work[num_cols].copy()
+        if adaptive_sampling:
+            data = maybe_sample(data)
         if engine == "dask":
             try:
                 import dask.dataframe as dd
@@ -171,6 +186,8 @@ def compute_corr_matrix(
         if not cat_cols:
             raise ValueError("Não há colunas categóricas para calcular Cramér‑V")
         data = df_work[cat_cols].copy()
+        if adaptive_sampling:
+            data = maybe_sample(data)
         corr = _cramers_v_matrix(data)
         if verbose:
             LOGGER.info(

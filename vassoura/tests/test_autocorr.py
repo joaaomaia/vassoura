@@ -50,7 +50,7 @@ def test_analisar_autocorrelacao_levels() -> None:
         nlags=6,
         min_periods=6,
     )
-    result = analisar_autocorrelacao(panel, "val", verbose=False)
+    result = analisar_autocorrelacao(panel, "val", verbose="none")
     assert {"feature", "acf_max", "acf_lag_max", "nivel", "recomendacao"} <= result.keys()
 
 
