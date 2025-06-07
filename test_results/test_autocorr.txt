@@ -1,0 +1,14 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
+configfile: pyproject.toml
+plugins: anyio-4.9.0
+collecting ... collected 4 items
+
+vassoura/tests/test_autocorr.py::test_compute_panel_acf_basic PASSED     [ 25%]
+vassoura/tests/test_autocorr.py::test_analisar_autocorrelacao_levels PASSED [ 50%]
+vassoura/tests/test_autocorr.py::test_plot_panel_acf PASSED              [ 75%]
+vassoura/tests/test_autocorr.py::test_make_period_index_invalid PASSED   [100%]
+
+============================== 4 passed in 3.00s ==============================
