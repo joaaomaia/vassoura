@@ -110,6 +110,14 @@ class Vassoura:
         ``None`` mantém o comportamento tradicional.
     vif_n_steps : int
         Número de etapas para remoção por VIF. Deve ser >= 1.
+    id_cols : list[str] | None
+        Colunas de identificadores preservadas e excluídas das análises.
+    date_cols : list[str] | None
+        Colunas de datas preservadas e excluídas das análises.
+    ignore_cols : list[str] | None
+        Colunas ignoradas. Removidas se ``drop_ignored=True``.
+    drop_ignored : bool
+        Remove ``ignore_cols`` do DataFrame final.
     """
 
     def __init__(
@@ -126,11 +134,25 @@ class Vassoura:
         adaptive_sampling: bool = False,
         n_steps: int | None = None,
         vif_n_steps: int = 1,
+        id_cols: Optional[List[str]] = None,
+        date_cols: Optional[List[str]] = None,
+        ignore_cols: Optional[List[str]] = None,
+        drop_ignored: bool = True,
     ) -> None:
         self.df_original = df.copy()
         self.df_current = df.copy()
         self.target_col = target_col
+        self.id_cols = list(id_cols or [])
+        self.date_cols = list(date_cols or [])
+        self.ignore_cols = set(ignore_cols or [])
+        self.drop_ignored = drop_ignored
         self.keep_cols = set(keep_cols or [])
+        self.keep_cols.update(self.id_cols)
+        self.keep_cols.update(self.date_cols)
+        if not drop_ignored:
+            self.keep_cols.update(self.ignore_cols)
+        if drop_ignored and self.ignore_cols:
+            self.df_current.drop(columns=list(self.ignore_cols), errors="ignore", inplace=True)
         self.engine = engine
         self.verbose, _ = parse_verbose(verbose, None)
         self.adaptive_sampling = adaptive_sampling
@@ -177,6 +199,8 @@ class Vassoura:
         """
         if recompute:
             self.reset()
+        if self.drop_ignored and self.ignore_cols:
+            self.df_current.drop(columns=list(self.ignore_cols), errors="ignore", inplace=True)
         if self.thresholds.get("missing") is not None:
             self._apply_missing()
         for h in self.heuristics:
@@ -185,8 +209,9 @@ class Vassoura:
                 raise ValueError(f"Heuristic '{h}' not recognized.")
             func()
         # Armazena correlação e VIF finais para relatórios
+        df_analysis = self._df_for_analysis()
         self._corr_matrix_final = compute_corr_matrix(
-            self.df_current,
+            df_analysis,
             method="auto",
             target_col=self.target_col,
             include_target=False,
@@ -197,7 +222,7 @@ class Vassoura:
         if self._vif_df is None:
             try:
                 self._vif_df = compute_vif(
-                    self.df_current,
+                    df_analysis,
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
@@ -206,6 +231,17 @@ class Vassoura:
                 )
             except Exception:
                 self._vif_df = None
+        # Reorganiza colunas e ordena se necessário
+        if self.id_cols or self.date_cols:
+            order = [c for c in self.id_cols if c in self.df_current.columns]
+            order += [c for c in self.date_cols if c in self.df_current.columns]
+            if self.target_col and self.target_col in self.df_current.columns:
+                order.append(self.target_col)
+            remaining = [c for c in self.df_current.columns if c not in order]
+            self.df_current = self.df_current[order + remaining]
+            sort_cols = [c for c in (self.id_cols + self.date_cols) if c in self.df_current.columns]
+            if sort_cols:
+                self.df_current = self.df_current.sort_values(sort_cols).reset_index(drop=True)
         return self.df_current
 
     def remove_additional(self, columns: List[str]) -> None:
@@ -216,8 +252,10 @@ class Vassoura:
         """Gera relatório utilizando caches já computados."""
 
         if self._corr_matrix is None:
+            base = self.df_original.drop(columns=[self.target_col], errors="ignore")
+            base = base.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
             self._corr_matrix = compute_corr_matrix(
-                self.df_original.drop(columns=[self.target_col], errors="ignore"),
+                base,
                 method="auto",
                 target_col=None,
                 include_target=False,
@@ -227,8 +265,10 @@ class Vassoura:
             )
 
         if self._corr_matrix_final is None:
+            df_final = self.df_current.drop(columns=[self.target_col], errors="ignore")
+            df_final = df_final.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
             self._corr_matrix_final = compute_corr_matrix(
-                self.df_current.drop(columns=[self.target_col], errors="ignore"),
+                df_final,
                 method="auto",
                 target_col=None,
                 include_target=False,
@@ -239,8 +279,9 @@ class Vassoura:
 
         if self._vif_df_before is None:
             try:
+                df_before = self.df_original.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
                 self._vif_df_before = compute_vif(
-                    self.df_original,
+                    df_before,
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
@@ -252,8 +293,9 @@ class Vassoura:
 
         if self._vif_df is None:
             try:
+                df_final = self.df_current.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
                 self._vif_df = compute_vif(
-                    self.df_current,
+                    df_final,
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
@@ -296,6 +338,8 @@ class Vassoura:
     def reset(self) -> None:
         """Restaura sessão ao estado inicial (apaga caches e histórico)."""
         self.df_current = self.df_original.copy()
+        if self.drop_ignored and self.ignore_cols:
+            self.df_current.drop(columns=list(self.ignore_cols), errors="ignore", inplace=True)
         self._corr_matrix = None
         self._corr_matrix_final = None
         self._vif_df_before = None
@@ -312,7 +356,8 @@ class Vassoura:
             return
         if self.verbose:
             print(f"[Vassoura] Missing heuristic (thr>{thr})")
-        miss_ratio = self.df_current.isna().mean()
+        df_work = self._df_for_analysis()
+        miss_ratio = df_work.isna().mean()
         cols = [c for c, r in miss_ratio.items() if r > thr and c != self.target_col]
         self._drop(cols, reason=f"missing>{thr}")
 
@@ -325,9 +370,10 @@ class Vassoura:
             print(msg)
         iteration = 0
         while True:
+            df_work = self._df_for_analysis()
             if self._corr_matrix is None or iteration > 0:
                 self._corr_matrix = compute_corr_matrix(
-                    self.df_current,
+                    df_work,
                     method="auto",
                     target_col=self.target_col,
                     include_target=False,
@@ -362,8 +408,9 @@ class Vassoura:
 
     def _apply_vif(self) -> None:
         thr = self.thresholds.get("vif", 10.0)
+        df_work = self._df_for_analysis()
         # Identificar colunas numéricas previstas para VIF
-        num_cols = self.df_current.select_dtypes(include=[np.number]).columns.tolist()
+        num_cols = df_work.select_dtypes(include=[np.number]).columns.tolist()
         if self.target_col in num_cols:
             num_cols.remove(self.target_col)
         # Se tiver ≤1 coluna numérica, não faz sentido calcular VIF
@@ -379,9 +426,10 @@ class Vassoura:
                 msg += f" vif_n_steps={self.vif_n_steps}"
             print(msg)
         while True:
+            df_work = self._df_for_analysis()
             try:
                 self._vif_df = compute_vif(
-                    self.df_current,
+                    df_work,
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
@@ -468,6 +516,7 @@ class Vassoura:
         df_for_graph = self.df_current.copy()
         if self.target_col in df_for_graph.columns:
             df_for_graph = df_for_graph.drop(columns=[self.target_col])
+        df_for_graph = df_for_graph.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
 
         # 2) Selecionar somente colunas numéricas
         num_cols = df_for_graph.select_dtypes(include=[np.number]).columns.tolist()
@@ -505,6 +554,11 @@ class Vassoura:
         med_a = self._corr_matrix[a].abs().median()
         med_b = self._corr_matrix[b].abs().median()
         return a if med_a >= med_b else b
+
+    def _df_for_analysis(self) -> pd.DataFrame:
+        """DataFrame excluindo IDs, datas e colunas ignoradas."""
+        exclude = set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
+        return self.df_current.drop(columns=list(exclude), errors="ignore")
 
     def _drop(self, cols: List[str], reason: str) -> None:
         cols = [c for c in cols if c not in self.keep_cols]
