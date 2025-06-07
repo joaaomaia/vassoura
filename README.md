@@ -93,6 +93,8 @@ pyproject.toml             # Configuração do projeto
 * **Métodos**: `pearson`, `spearman`, `cramer`, ou `auto` (decide com base nos tipos).
 * Gera **DataFrame** de correlação e **heat‑map** Seaborn com dimensionamento automático (anotações opcionais).
 * Pode utilizar `engine="dask"` ou `engine="polars"` para grandes DataFrames.
+* Caso o método escolhido não seja suportado pelo engine, a função faz fallback
+  para pandas e registra esse fato no log.
 
 ### 3. VIF (`compute_vif`, `remove_high_vif`)
 
