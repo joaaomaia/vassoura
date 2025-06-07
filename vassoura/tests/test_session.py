@@ -52,3 +52,28 @@ def test_reset(df_toy):
     vs.reset()
     assert "a" in vs.df_current.columns
     assert vs.history == []
+
+
+def test_fractional_steps_session(df_toy):
+    vs_full = Vassoura(
+        df_toy,
+        target_col="d",
+        heuristics=["corr", "vif"],
+        thresholds={"corr": 0.85, "vif": 5},
+        verbose=False,
+    )
+    df_full = vs_full.run()
+
+    vs_frac = Vassoura(
+        df_toy,
+        target_col="d",
+        heuristics=["corr", "vif"],
+        thresholds={"corr": 0.85, "vif": 5},
+        n_steps=2,
+        vif_n_steps=2,
+        verbose=False,
+    )
+    df_frac = vs_frac.run()
+
+    assert df_full.equals(df_frac)
+    assert set(vs_full.dropped) == set(vs_frac.dropped)

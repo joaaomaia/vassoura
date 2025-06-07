@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable
 
 import warnings
+import math
 
 import numpy as np
 import pandas as pd
@@ -101,6 +102,11 @@ class Vassoura:
         Backend utilizado nos cálculos pesados. ``"pandas"`` é o padrão.
     verbose : bool
         Se `True`, imprime progresso no console.
+    n_steps : int | None
+        Quantidade de iterações fracionadas para remoção por correlação.
+        ``None`` mantém o comportamento tradicional.
+    vif_n_steps : int
+        Número de etapas para remoção por VIF. Deve ser >= 1.
     """
 
     def __init__(
@@ -114,6 +120,8 @@ class Vassoura:
         missing_threshold: Optional[float] = None,
         engine: str = "pandas",
         verbose: bool = True,
+        n_steps: int | None = None,
+        vif_n_steps: int = 1,
     ) -> None:
         self.df_original = df.copy()
         self.df_current = df.copy()
@@ -121,6 +129,12 @@ class Vassoura:
         self.keep_cols = set(keep_cols or [])
         self.engine = engine
         self.verbose = verbose
+        if n_steps is not None and n_steps < 1:
+            raise ValueError("n_steps deve ser >= 1 ou None")
+        if vif_n_steps < 1:
+            raise ValueError("vif_n_steps deve ser >= 1")
+        self.n_steps = n_steps
+        self.vif_n_steps = vif_n_steps
 
         self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
         # Valores padrão, podem ser sobrescritos
@@ -294,28 +308,46 @@ class Vassoura:
     def _apply_corr(self) -> None:
         thr = self.thresholds.get("corr", 0.9)
         if self.verbose:
-            print(f"[Vassoura] Corr heuristic (thr={thr})")
-        if self._corr_matrix is None:
-            self._corr_matrix = compute_corr_matrix(
-                self.df_current,
-                method="auto",
-                target_col=self.target_col,
-                include_target=False,
-                engine=self.engine,
-                verbose=self.verbose,
+            msg = f"[Vassoura] Corr heuristic (thr={thr})"
+            if self.n_steps is not None:
+                msg += f" n_steps={self.n_steps}"
+            print(msg)
+        iteration = 0
+        while True:
+            if self._corr_matrix is None or iteration > 0:
+                self._corr_matrix = compute_corr_matrix(
+                    self.df_current,
+                    method="auto",
+                    target_col=self.target_col,
+                    include_target=False,
+                    engine=self.engine,
+                    verbose=self.verbose,
+                )
+            upper_tri = self._corr_matrix.where(
+                np.triu(np.ones_like(self._corr_matrix, dtype=bool), k=1)
             )
-        mask = (self._corr_matrix.abs() > thr) & (
-            ~np.eye(len(self._corr_matrix), dtype=bool)
-        )
-        pairs = mask.stack().loc[lambda s: s]
-        for var1, var2 in pairs.index:
-            if (
-                var1 not in self.df_current.columns
-                or var2 not in self.df_current.columns
-            ):
-                continue
-            drop_var = self._choose_var_to_drop(var1, var2)
-            self._drop([drop_var], reason=f"corr>{thr}")
+            pairs = upper_tri.stack().loc[lambda s: s.abs() > thr]
+            if pairs.empty:
+                break
+            step_limit = len(pairs) if self.n_steps is None else math.ceil(
+                len(pairs) / self.n_steps
+            )
+            removed_this_iter = 0
+            for (var1, var2), corr_val in pairs.sort_values(
+                key=lambda s: s.abs(), ascending=False
+            ).items():
+                if (
+                    var1 not in self.df_current.columns
+                    or var2 not in self.df_current.columns
+                ):
+                    continue
+                drop_var = self._choose_var_to_drop(var1, var2)
+                if drop_var and drop_var in self.df_current.columns:
+                    self._drop([drop_var], reason=f"corr>{thr}")
+                    removed_this_iter += 1
+                    if removed_this_iter >= step_limit:
+                        break
+            iteration += 1
 
     def _apply_vif(self) -> None:
         thr = self.thresholds.get("vif", 10.0)
@@ -331,7 +363,10 @@ class Vassoura:
                 )
             return
         if self.verbose:
-            print(f"[Vassoura] VIF heuristic (thr={thr})")
+            msg = f"[Vassoura] VIF heuristic (thr={thr})"
+            if self.vif_n_steps != 1:
+                msg += f" vif_n_steps={self.vif_n_steps}"
+            print(msg)
         while True:
             try:
                 self._vif_df = compute_vif(
@@ -350,8 +385,14 @@ class Vassoura:
             worst = self._vif_df[self._vif_df["vif"] > thr]
             if worst.empty:
                 break
-            worst_var = worst.sort_values("vif", ascending=False).iloc[0]["variable"]
-            self._drop([worst_var], reason=f"vif>{thr}")
+            step_limit = 1 if self.vif_n_steps == 1 else max(1, math.ceil(len(worst) / self.vif_n_steps))
+            removed_this_iter = 0
+            for _, row in worst.sort_values("vif", ascending=False).iterrows():
+                var = row["variable"]
+                self._drop([var], reason=f"vif>{thr}")
+                removed_this_iter += 1
+                if removed_this_iter >= step_limit:
+                    break
 
     def _apply_iv(self) -> None:
         thr = self.thresholds.get("iv", 0.02)
