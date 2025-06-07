@@ -9,6 +9,7 @@ preservar e opção de incluir o *target* no *DataFrame* analisado.
 
 import logging
 import math
+import warnings
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -139,7 +140,12 @@ decrescentemente.
         X = data.values
 
     if variance_inflation_factor is not None:
-        vif_vals = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
+        # statsmodels dispara RuntimeWarning quando existe multicolinearidade
+        # perfeita e o denominador do VIF se torna zero. Esses avisos poluem
+        # a saída dos testes; portanto suprimimos apenas nessa chamada.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            vif_vals = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
     else:  # fallback numpy puro
         vif_vals = _compute_vif_np(X)
 
