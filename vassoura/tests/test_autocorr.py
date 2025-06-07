@@ -2,21 +2,24 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from vassoura.autocorrelacao import compute_panel_acf, plot_panel_acf
+from vassoura.autocorrelacao import compute_panel_acf, plot_panel_acf, _make_period_index
 from vassoura.analisador import analisar_autocorrelacao
 
 
 def _make_panel_df(n_contracts: int = 10, months: int = 18) -> pd.DataFrame:
+    """Dataset sintético de painel com datas válidas no formato YYYYMM."""
     rng = np.random.default_rng(0)
     rows = []
     for i in range(n_contracts):
-        start = 202001
+        start = pd.Period("2020-01", freq="M")
         for m in range(months):
+            period = start + m
             rows.append(
                 {
                     "cid": i,
-                    "ym": start + m,
+                    "ym": int(period.strftime("%Y%m")),
                     "val": rng.normal() + i * 0.1,
                 }
             )
@@ -63,4 +66,9 @@ def test_plot_panel_acf() -> None:
     )
     ax = plot_panel_acf(panel, title="test")
     assert ax.get_title() == "test"
+
+
+def test_make_period_index_invalid():
+    with pytest.raises(ValueError):
+        _make_period_index(pd.Series([202013]))
 
