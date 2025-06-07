@@ -22,12 +22,20 @@ import math
 from typing import List, Optional
 
 import matplotlib.pyplot as plt
+import matplotlib
 
 try:  # mplcursors é opcional
     import mplcursors
 except Exception:  # pragma: no cover - ambiente pode não ter mplcursors
     mplcursors = None
 import numpy as np
+
+
+def _pick_text_color(rgb: tuple[float, float, float]) -> str:
+    """Escolhe cor de texto de acordo com luminância."""
+    r, g, b = rgb
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return "#000" if lum > 0.6 else "#fff"
 import pandas as pd
 import seaborn as sns
 from scipy.stats import chi2_contingency
@@ -234,7 +242,7 @@ def plot_corr_heatmap(
     title: str | None = None,
     annot: bool = False,
     fmt: str = ".2f",
-    cmap: str = "coolwarm",
+    cmap: matplotlib.colors.Colormap = sns.color_palette("flare", as_cmap=True),
     mask_upper: bool = True,
     base_figsize: float = 0.45,
     min_size: int = 6,
@@ -283,7 +291,7 @@ def plot_corr_heatmap(
     if mask_upper:
         mask = np.triu(np.ones_like(corr, dtype=bool))
 
-    sns.heatmap(
+    hm = sns.heatmap(
         corr,
         ax=ax,
         cmap=cmap,
@@ -294,6 +302,15 @@ def plot_corr_heatmap(
         mask=mask,
         cbar_kws={"shrink": 0.8},
     )
+
+    if annot:
+        data = corr.to_numpy()
+        mesh = ax.collections[0]
+        norm = mesh.norm
+        cmap_obj = mesh.cmap
+        for text, val in zip(ax.texts, data.flatten()):
+            rgb = cmap_obj(norm(val))[:3]
+            text.set_color(_pick_text_color(rgb))
 
     if highlight_labels:
         thr = abs(corr_threshold)
