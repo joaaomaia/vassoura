@@ -184,7 +184,13 @@ def search_dtypes(
         s = df_work[col]
         try:
             if col in date_col:
-                pd.to_datetime(s, errors="coerce")
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message="Could not infer format",
+                        category=UserWarning,
+                    )
+                    pd.to_datetime(s, errors="coerce", dayfirst=True)
                 if verbose_types:
                     LOGGER.info("%s -> datetime (explicit)", col)
                 continue
@@ -213,7 +219,13 @@ def search_dtypes(
                 continue
 
             # Colunas object / string
-            try_dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="Could not infer format",
+                    category=UserWarning,
+                )
+                try_dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
             if try_dt.notna().mean() > 0.8 and try_dt.notna().any():
                 if verbose_types:
                     LOGGER.info("%s -> datetime (auto)", col)
