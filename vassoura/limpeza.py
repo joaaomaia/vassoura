@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 
 from .correlacao import compute_corr_matrix
-from .vif import remove_high_vif, compute_vif
+from .vif import compute_vif, remove_high_vif
+from .utils import parse_verbose
 
 __all__ = [
     "clean",
@@ -116,8 +117,9 @@ def clean(
     n_steps: int | None = None,
     vif_n_steps: int = 1,
     date_col: Optional[List[str]] = None,
-    verbose: bool = True,
-    verbose_types: bool = False,
+    verbose: str | bool = "basic",
+    verbose_types: bool | None = None,
+    adaptive_sampling: bool = False,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame, pd.DataFrame]:
     """Executa limpeza de multicolinearidade via correlação + VIF.
 
@@ -148,10 +150,12 @@ def clean(
         ``None`` mantém o comportamento tradicional (remoção completa).
     vif_n_steps : int
         Número de etapas para remoção por VIF. Por padrão ``1``.
-    verbose : bool
-        Controla *logs*.
+    verbose : str | bool
+        ``"none"``, ``"basic"`` ou ``"full"``.
     verbose_types : bool
         Se ``True``, logs detalhados de detecção de tipos.
+    adaptive_sampling : bool
+        Usa amostragem adaptativa em ``compute_corr_matrix`` e ``compute_vif``.
 
     Returns
     -------
@@ -160,12 +164,16 @@ def clean(
     corr_matrix_final : pandas.DataFrame
     vif_final : pandas.DataFrame
     """
+    verbose, verbose_types = parse_verbose(verbose, verbose_types)
+
     keep_cols = set(keep_cols or [])
     if target_col and include_target:
         keep_cols.add(target_col)
 
     df_work = df.copy()
     dropped_overall: List[str] = []
+    dropped_corr: List[str] = []
+    dropped_vif: List[str] = []
 
     # ---------------------------------------------------------------------
     # 1) Remoção por correlação
@@ -185,6 +193,7 @@ def clean(
                 date_col=date_col,
                 verbose=verbose,
                 verbose_types=verbose_types,
+                adaptive_sampling=adaptive_sampling,
             )
             upper_tri = corr_matrix.where(
                 np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
@@ -227,6 +236,7 @@ def clean(
                 ):
                     df_work = df_work.drop(columns=[drop_var])
                     dropped_overall.append(drop_var)
+                    dropped_corr.append(drop_var)
                     removed_this_iter.append(drop_var)
                     if verbose:
                         LOGGER.info(
@@ -259,6 +269,7 @@ def clean(
             date_col=date_col,
             verbose=verbose,
             verbose_types=verbose_types,
+            adaptive_sampling=adaptive_sampling,
         )
     else:
         corr_matrix_final = pd.DataFrame()
@@ -267,7 +278,7 @@ def clean(
     # 2) Remoção por VIF
     # ---------------------------------------------------------------------
     if vif_threshold and vif_threshold < np.inf:
-        df_work, dropped_vif, vif_final = remove_high_vif(
+        df_work, dropped_vif_list, vif_final = remove_high_vif(
             df_work,
             vif_threshold=vif_threshold,
             target_col=target_col,
@@ -282,8 +293,10 @@ def clean(
             date_col=date_col,
             verbose=verbose,
             verbose_types=verbose_types,
+            adaptive_sampling=adaptive_sampling,
         )
-        dropped_overall.extend(dropped_vif)
+        dropped_vif.extend(dropped_vif_list)
+        dropped_overall.extend(dropped_vif_list)
     else:
         vif_final = compute_vif(
             df_work,
@@ -296,6 +309,21 @@ def clean(
             date_col=date_col,
             verbose=verbose,
             verbose_types=verbose_types,
+            adaptive_sampling=adaptive_sampling,
+        )
+
+    if verbose:
+        LOGGER.info("Resumo final de remoções:")
+        LOGGER.info("Método | Variáveis removidas | Total")
+        LOGGER.info(
+            "corr   | %s | %d",
+            dropped_corr,
+            len(dropped_corr),
+        )
+        LOGGER.info(
+            "vif    | %s | %d",
+            dropped_vif,
+            len(dropped_vif),
         )
 
     return df_work, dropped_overall, corr_matrix_final, vif_final

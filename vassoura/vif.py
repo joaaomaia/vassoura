@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from numpy.linalg import LinAlgError
 
-from .utils import search_dtypes
+from .utils import maybe_sample, parse_verbose, search_dtypes
 
 try:
     from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -77,8 +77,9 @@ def compute_vif(
     remove_ids: bool = False,
     id_patterns: Optional[List[str]] = None,
     date_col: Optional[List[str]] = None,
-    verbose: bool = True,
-    verbose_types: bool = False,
+    verbose: str | bool = "basic",
+    verbose_types: bool | None = None,
+    adaptive_sampling: bool = False,
 ) -> pd.DataFrame:
     """Calcula VIF para todas as colunas numéricas.
 
@@ -90,13 +91,15 @@ def compute_vif(
             Nome da coluna *target*.
         include_target : bool, default False
             Considera a coluna *target* no cálculo de VIF.
-        limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
-        verbose, verbose_types
-            Encaminhados para ``search_dtypes``.
-        engine : {"pandas", "dask", "polars"}
-            Backend utilizado para acelerar o cálculo quando disponível.
-        verbose : bool
-            Exibe *logs*.
+    limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
+    verbose, verbose_types
+        Encaminhados para ``search_dtypes``.
+    engine : {"pandas", "dask", "polars"}
+        Backend utilizado para acelerar o cálculo quando disponível.
+    verbose : str | bool
+        ``"none"``, ``"basic"`` ou ``"full"``.
+    adaptive_sampling : bool
+        Se ``True``, amostra dados (até 50k linhas) antes do cálculo.
 
         Returns
         -------
@@ -104,6 +107,8 @@ def compute_vif(
             DataFrame com colunas ``variable`` e ``vif`` ordenado
     decrescentemente.
     """
+    verbose, verbose_types = parse_verbose(verbose, verbose_types)
+
     # Remove target se necessário
     drop_target = target_col and not include_target
     df_work = (
@@ -134,6 +139,8 @@ def compute_vif(
             "Descartando %d linha(s) com NaN/inf para cálculo de VIF",
             rows_before - rows_after,
         )
+    if adaptive_sampling:
+        data = maybe_sample(data)
 
     if engine == "dask":
         try:
@@ -183,8 +190,9 @@ def remove_high_vif(
     id_patterns: Optional[List[str]] = None,
     engine: str = "pandas",
     date_col: Optional[List[str]] = None,
-    verbose: bool = True,
-    verbose_types: bool = False,
+    verbose: str | bool = "basic",
+    verbose_types: bool | None = None,
+    adaptive_sampling: bool = False,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame]:
     """Remove iterativamente variáveis com VIF acima do limiar.
 
@@ -202,11 +210,16 @@ def remove_high_vif(
         VIF das variáveis remanescentes.
     engine : {"pandas", "dask", "polars"}
         Backend a ser utilizado nas chamadas de ``compute_vif``.
+    verbose : str | bool
+        ``"none"``, ``"basic"`` ou ``"full"``.
+    adaptive_sampling : bool
+        Ativa amostragem adaptativa em ``compute_vif``.
     date_col : list[str] | None
         Colunas convertidas para ``datetime`` antes da detecção de tipos.
     verbose_types : bool
         Exibe logs detalhados de classificação de tipos.
     """
+    verbose, verbose_types = parse_verbose(verbose, verbose_types)
     keep_cols = keep_cols or []
     df_iter = df.copy()
     dropped: List[str] = []
@@ -227,6 +240,7 @@ def remove_high_vif(
             date_col=date_col,
             verbose=verbose,
             verbose_types=verbose_types,
+            adaptive_sampling=adaptive_sampling,
         )
 
         vif_high = vif_df[

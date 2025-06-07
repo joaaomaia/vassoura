@@ -20,6 +20,7 @@ import pandas as pd
 
 from .correlacao import compute_corr_matrix
 from .vif import compute_vif
+from .utils import parse_verbose
 from .relatorio import generate_report
 from .heuristics import graph_cut
 
@@ -100,8 +101,10 @@ class Vassoura:
         desse limite antes das outras heurísticas.
     engine : {"pandas", "dask", "polars"}
         Backend utilizado nos cálculos pesados. ``"pandas"`` é o padrão.
-    verbose : bool
-        Se `True`, imprime progresso no console.
+    verbose : str | bool
+        ``"none"``, ``"basic"`` ou ``"full"``.
+    adaptive_sampling : bool
+        Ativa amostragem adaptativa.
     n_steps : int | None
         Quantidade de iterações fracionadas para remoção por correlação.
         ``None`` mantém o comportamento tradicional.
@@ -119,7 +122,8 @@ class Vassoura:
         thresholds: Optional[Dict[str, float]] = None,
         missing_threshold: Optional[float] = None,
         engine: str = "pandas",
-        verbose: bool = True,
+        verbose: str | bool = "basic",
+        adaptive_sampling: bool = False,
         n_steps: int | None = None,
         vif_n_steps: int = 1,
     ) -> None:
@@ -128,7 +132,8 @@ class Vassoura:
         self.target_col = target_col
         self.keep_cols = set(keep_cols or [])
         self.engine = engine
-        self.verbose = verbose
+        self.verbose, _ = parse_verbose(verbose, None)
+        self.adaptive_sampling = adaptive_sampling
         if n_steps is not None and n_steps < 1:
             raise ValueError("n_steps deve ser >= 1 ou None")
         if vif_n_steps < 1:
@@ -187,6 +192,7 @@ class Vassoura:
             include_target=False,
             engine=self.engine,
             verbose=self.verbose,
+            adaptive_sampling=self.adaptive_sampling,
         )
         if self._vif_df is None:
             try:
@@ -196,6 +202,7 @@ class Vassoura:
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
+                    adaptive_sampling=self.adaptive_sampling,
                 )
             except Exception:
                 self._vif_df = None
@@ -216,6 +223,7 @@ class Vassoura:
                 include_target=False,
                 engine=self.engine,
                 verbose=self.verbose,
+                adaptive_sampling=self.adaptive_sampling,
             )
 
         if self._corr_matrix_final is None:
@@ -226,6 +234,7 @@ class Vassoura:
                 include_target=False,
                 engine=self.engine,
                 verbose=self.verbose,
+                adaptive_sampling=self.adaptive_sampling,
             )
 
         if self._vif_df_before is None:
@@ -236,6 +245,7 @@ class Vassoura:
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
+                    adaptive_sampling=self.adaptive_sampling,
                 )
             except Exception:
                 self._vif_df_before = None
@@ -248,6 +258,7 @@ class Vassoura:
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
+                    adaptive_sampling=self.adaptive_sampling,
                 )
             except Exception:
                 self._vif_df = None

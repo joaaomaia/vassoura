@@ -60,7 +60,7 @@ def test_fractional_steps_session(df_toy):
         target_col="d",
         heuristics=["corr", "vif"],
         thresholds={"corr": 0.85, "vif": 5},
-        verbose=False,
+        verbose="none",
     )
     df_full = vs_full.run()
 
@@ -71,7 +71,7 @@ def test_fractional_steps_session(df_toy):
         thresholds={"corr": 0.85, "vif": 5},
         n_steps=2,
         vif_n_steps=2,
-        verbose=False,
+        verbose="none",
     )
     df_frac = vs_frac.run()
 

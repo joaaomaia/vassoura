@@ -13,19 +13,19 @@ def _make_correlacao_data():
 
 def test_corr_matrix_pearson():
     df = _make_correlacao_data()
-    corr = compute_corr_matrix(df, method="pearson", target_col="target", verbose=False)
+    corr = compute_corr_matrix(df, method="pearson", target_col="target", verbose="none")
     assert isinstance(corr, pd.DataFrame)
     assert "x1" in corr.columns and "x2" in corr.columns
     assert corr.loc["x1", "x2"] > 0.9
 
 def test_corr_matrix_spearman():
     df = _make_correlacao_data()
-    corr = compute_corr_matrix(df, method="spearman", target_col="target", verbose=False)
+    corr = compute_corr_matrix(df, method="spearman", target_col="target", verbose="none")
     assert isinstance(corr, pd.DataFrame)
     assert corr.shape[0] == corr.shape[1]
 
 def test_corr_matrix_auto_detect():
     df = _make_correlacao_data()
-    corr = compute_corr_matrix(df, method="auto", target_col="target", verbose=False)
+    corr = compute_corr_matrix(df, method="auto", target_col="target", verbose="none")
     assert isinstance(corr, pd.DataFrame)
     assert "x3" in corr.columns

@@ -18,7 +18,7 @@ def test_clean_removes_correlated_variable():
         keep_cols=["x1"],
         corr_threshold=0.85,
         vif_threshold=5,
-        verbose=False
+        verbose="none"
     )
     assert "x2" in dropped
     assert "x1" in df_clean.columns
@@ -32,6 +32,6 @@ def test_clean_keeps_unrelated_variable():
         keep_cols=["x3"],
         corr_threshold=0.85,
         vif_threshold=5,
-        verbose=False
+        verbose="none"
     )
     assert "x3" in df_clean.columns
