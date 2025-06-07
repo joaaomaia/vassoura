@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Vassoura – Limpeza de multicolinearidade
 =======================================
 
@@ -21,7 +22,6 @@ import numpy as np
 import pandas as pd
 
 from .correlacao import compute_corr_matrix
-from .utils import search_dtypes, suggest_corr_method
 from .vif import remove_high_vif, compute_vif
 
 __all__ = [
@@ -34,13 +34,14 @@ LOGGER = logging.getLogger("vassoura")
 # Funções auxiliares
 # ---------------------------------------------------------------------------
 
+
 def _select_var_to_drop(
     corr_df: pd.DataFrame,
     pair: Tuple[str, str],
     keep_cols: List[str],
     *,
-    metric: str = "median",           # "mean", "median", "max"
-    weight_keep: float = 1.5,       # pondera correlação com keep_cols
+    metric: str = "median",  # "mean", "median", "max"
+    weight_keep: float = 1.5,  # pondera correlação com keep_cols
 ) -> str:
     """Decide qual variável descartar em um par altamente correlacionado.
 
@@ -55,7 +56,8 @@ def _select_var_to_drop(
     metric : str, optional
         Estatística usada na decisão: "mean", "median" ou "max".
     weight_keep : float, optional
-        Fator multiplicativo aplicado às correlações contra colunas prioritárias.
+        Fator multiplicativo aplicado às correlações contra colunas
+        prioritárias.
 
     Returns
     -------
@@ -67,7 +69,7 @@ def _select_var_to_drop(
 
     # 1) Prioridade absoluta às colunas protegidas
     if var1 in keep_cols and var2 in keep_cols:
-        return ""                   # não remove nenhuma
+        return ""  # não remove nenhuma
     if var1 in keep_cols:
         return var2
     if var2 in keep_cols:
@@ -91,9 +93,11 @@ def _select_var_to_drop(
 
     return var1 if _score(var1) >= _score(var2) else var2
 
+
 # ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
+
 
 def clean(
     df: pd.DataFrame,
@@ -111,7 +115,9 @@ def clean(
     max_vif_iter: int = 20,
     n_steps: int | None = None,
     vif_n_steps: int = 1,
+    date_col: Optional[List[str]] = None,
     verbose: bool = True,
+    verbose_types: bool = False,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame, pd.DataFrame]:
     """Executa limpeza de multicolinearidade via correlação + VIF.
 
@@ -132,7 +138,8 @@ def clean(
         Limiar VIF. Se ``None`` ou ``np.inf`` ignora passo de VIF.
     keep_cols : list[str] | None
         Colunas que jamais devem ser removidas.
-    limite_categorico, force_categorical, remove_ids, id_patterns
+    limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
+    verbose, verbose_types
         Encaminhados para ``search_dtypes``.
     max_vif_iter : int
         Máximo de iterações do filtro VIF.
@@ -143,6 +150,8 @@ def clean(
         Número de etapas para remoção por VIF. Por padrão ``1``.
     verbose : bool
         Controla *logs*.
+    verbose_types : bool
+        Se ``True``, logs detalhados de detecção de tipos.
 
     Returns
     -------
@@ -173,9 +182,13 @@ def clean(
                 force_categorical=force_categorical,
                 remove_ids=remove_ids,
                 id_patterns=id_patterns,
+                date_col=date_col,
                 verbose=verbose,
+                verbose_types=verbose_types,
             )
-            upper_tri = corr_matrix.where(np.triu(np.ones_like(corr_matrix, dtype=bool), k=1))
+            upper_tri = corr_matrix.where(
+                np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
+            )
             pairs = upper_tri.stack().loc[lambda s: s.abs() > corr_threshold]
 
             if iteration == 0:
@@ -195,19 +208,30 @@ def clean(
             if pairs.empty:
                 break
 
-            step_limit = len(pairs) if n_steps is None else math.ceil(len(pairs) / n_steps)
+            step_limit = (
+                len(pairs) if n_steps is None else math.ceil(len(pairs) / n_steps)
+            )
             removed_this_iter: List[str] = []
-            for (var1, var2), corr_val in pairs.sort_values(key=lambda s: s.abs(), ascending=False).items():
+            for (var1, var2), corr_val in pairs.sort_values(
+                key=lambda s: s.abs(), ascending=False
+            ).items():
                 if var1 not in df_work.columns or var2 not in df_work.columns:
                     continue
-                drop_var = _select_var_to_drop(corr_matrix, (var1, var2), list(keep_cols))
-                if drop_var and drop_var in df_work.columns and drop_var not in keep_cols:
+                drop_var = _select_var_to_drop(
+                    corr_matrix, (var1, var2), list(keep_cols)
+                )
+                if (
+                    drop_var
+                    and drop_var in df_work.columns
+                    and drop_var not in keep_cols
+                ):
                     df_work = df_work.drop(columns=[drop_var])
                     dropped_overall.append(drop_var)
                     removed_this_iter.append(drop_var)
                     if verbose:
                         LOGGER.info(
-                            "Iteração %d: removendo '%s' devido a |corr|=%.3f com '%s'",
+                            "Iteração %d: removendo '%s' devido a |corr|=%.3f "
+                            "com '%s'",
                             iteration + 1,
                             drop_var,
                             abs(corr_val),
@@ -232,7 +256,9 @@ def clean(
             force_categorical=force_categorical,
             remove_ids=remove_ids,
             id_patterns=id_patterns,
+            date_col=date_col,
             verbose=verbose,
+            verbose_types=verbose_types,
         )
     else:
         corr_matrix_final = pd.DataFrame()
@@ -253,7 +279,9 @@ def clean(
             force_categorical=force_categorical,
             remove_ids=remove_ids,
             id_patterns=id_patterns,
+            date_col=date_col,
             verbose=verbose,
+            verbose_types=verbose_types,
         )
         dropped_overall.extend(dropped_vif)
     else:
@@ -265,7 +293,9 @@ def clean(
             force_categorical=force_categorical,
             remove_ids=remove_ids,
             id_patterns=id_patterns,
+            date_col=date_col,
             verbose=verbose,
+            verbose_types=verbose_types,
         )
 
     return df_work, dropped_overall, corr_matrix_final, vif_final
