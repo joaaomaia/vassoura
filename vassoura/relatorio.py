@@ -377,7 +377,7 @@ def generate_report(
     fig_vif.tight_layout(w_pad=2)
     img_vif_pair = _fig_to_base64(fig_vif)
 
-    # 8) Shadow-Feature Analysis (KS + SHAP)
+    # 8) Shadow-Feature Analysis
     if target_col is not None:
         if "__shadow__" not in df_clean.columns:
             np.random.seed(0)
@@ -422,22 +422,76 @@ def generate_report(
         expl = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
         shap_vals = expl.shap_values(X)
         shap_arr = shap_vals[1] if isinstance(shap_vals, list) else shap_vals
-        shap_gain = pd.Series(np.abs(shap_arr).mean(0), index=X.columns).sort_values(ascending=False)
 
-        fig_shadow, (ax_ks, ax_shap) = plt.subplots(
-            ncols=2,
-            sharey=True,
-            figsize=(12, 0.4 * max(len(ks_s), 1) + 1),
+        gain_raw = getattr(getattr(model, "booster_", model), "feature_importance", lambda *a, **k: np.zeros(len(X.columns)))("gain")
+        gain_arr = np.array(gain_raw)
+        if gain_arr.size != len(X.columns):
+            gain_arr = np.zeros(len(X.columns))
+        gain_s = pd.Series(gain_arr, index=X.columns).sort_values(ascending=False)
+
+        n_feat = max(len(cols_eval), 1)
+        fig_shadow, (ax_shap, ax_ks, ax_imp) = plt.subplots(
+            1,
+            3,
+            figsize=(15, 0.4 * n_feat + 2),
         )
-        pal = sns.color_palette("flare", len(ks_s))
-        ks_df = ks_s.reset_index().rename(columns={"index": "feature", 0: "ks"})
-        sns.barplot(data=ks_df, y="feature", x="ks", hue="feature", legend=False, palette=pal, orient="h", ax=ax_ks)
+
+        # SHAP summary plot
+        expl_values = shap.Explanation(
+            shap_arr,
+            base_values=np.zeros(len(X)),
+            data=X,
+            feature_names=X.columns,
+        )
+        shap.plots.beeswarm(expl_values, show=False, plot_size=None, ax=ax_shap)
+        ax_shap.set_title("SHAP Summary")
+        shadow_labels = [t.get_text() for t in ax_shap.get_yticklabels()]
+        if "__shadow__" in shadow_labels:
+            idx = shadow_labels.index("__shadow__")
+            coll = ax_shap.collections[idx]
+            coll.set_sizes([120] * len(coll.get_sizes()))
+            coll.set_edgecolors(["red"] * len(coll.get_edgecolors()))
+
+        # KS by feature
+        pal_ks = sns.color_palette("flare", len(ks_s))
+        ks_colors = {
+            f: ("#FFB347" if f == "__shadow__" else pal_ks[i])
+            for i, f in enumerate(ks_s.index)
+        }
+        ks_df = ks_s.reset_index().rename(columns={"index": "feature", 0: "KS"})
+        sns.barplot(
+            data=ks_df,
+            y="feature",
+            x="KS",
+            hue="feature",
+            legend=False,
+            palette=ks_colors,
+            orient="h",
+            ax=ax_ks,
+        )
         ax_ks.set_title("KS")
-        shap_df = shap_gain.reset_index().rename(columns={"index": "feature", 0: "gain"})
-        sns.barplot(data=shap_df, y="feature", x="gain", hue="feature", legend=False, palette=pal, orient="h", ax=ax_shap)
-        ax_shap.set_title("SHAP Gain")
+
+        # LightGBM Gain
+        pal_imp = sns.color_palette("flare", len(gain_s))
+        imp_colors = {
+            f: ("#FFB347" if f == "__shadow__" else pal_imp[i])
+            for i, f in enumerate(gain_s.index)
+        }
+        imp_df = gain_s.reset_index().rename(columns={"index": "feature", 0: "gain"})
+        sns.barplot(
+            data=imp_df,
+            y="feature",
+            x="gain",
+            hue="feature",
+            legend=False,
+            palette=imp_colors,
+            orient="h",
+            ax=ax_imp,
+        )
+        ax_imp.set_title("LightGBM Gain")
+
         fig_shadow.tight_layout()
-        img_shadow_pair = _fig_to_base64(fig_shadow)
+        img_shadow_triplet = _fig_to_base64(fig_shadow)
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -619,7 +673,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 "<div class=\"section\" id=\"shadow\">"
                 "<h2>10. Shadow-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
-                f"<img src='{img_shadow_pair}' alt='KS &amp; SHAP comparativo'>"
+                f"<img src='{img_shadow_triplet}' alt='SHAP · KS · LightGBM Gain'>"
                 "</div>\n"
             )
 
