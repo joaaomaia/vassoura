@@ -113,20 +113,30 @@ decrescentemente.
     if not num_cols:
         raise ValueError("Nenhuma coluna numérica identificada para cálculo de VIF")
 
+    data = df_work[num_cols].astype(float).replace([np.inf, -np.inf], np.nan)
+    rows_before = len(data)
+    data = data.dropna()
+    rows_after = len(data)
+    if verbose and rows_after < rows_before:
+        LOGGER.info(
+            "Descartando %d linha(s) com NaN/inf para cálculo de VIF",
+            rows_before - rows_after,
+        )
+
     if engine == "dask":
         try:
             import dask.dataframe as dd
         except ImportError as exc:
             raise ImportError("engine='dask' requer dask instalado") from exc
-        X = dd.from_pandas(df_work[num_cols].astype(float), npartitions=4).to_dask_array(lengths=True).compute()
+        X = dd.from_pandas(data, npartitions=4).to_dask_array(lengths=True).compute()
     elif engine == "polars":
         try:
             import polars as pl
         except ImportError as exc:
             raise ImportError("engine='polars' requer polars instalado") from exc
-        X = pl.from_pandas(df_work[num_cols].astype(float)).to_numpy()
+        X = pl.from_pandas(data).to_numpy()
     else:
-        X = df_work[num_cols].astype(float).values
+        X = data.values
 
     if variance_inflation_factor is not None:
         vif_vals = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
