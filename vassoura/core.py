@@ -173,9 +173,9 @@ class Vassoura:
         Colunas protegidas que jamais serão removidas.
     heuristics : list[str] | None
         Sequência de heurísticas a executar. Valores suportados:
-        `'corr'`, `'vif'`, `'iv'`, `'importance'`, `'graph_cut'`.
+        `'corr'`, `'vif'`, `'iv'`, `'importance'`, `'graph_cut'`, `'variance'`.
     thresholds : dict[str, float] | None
-        Dicionário de limites por heurística, ex: `{'corr':0.9, 'vif':10, 'iv':0.02}`.
+        Dicionário de limites por heurística, ex: `{'corr':0.9, 'vif':10, 'iv':0.02, 'variance':1e-4}`.
     missing_threshold : float | None
         Se definido, remove colunas com proporção de valores ausentes acima
         desse limite antes das outras heurísticas.
@@ -247,7 +247,13 @@ class Vassoura:
 
         self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
         # Valores padrão, podem ser sobrescritos
-        self.thresholds = {"corr": 0.9, "vif": 10.0, "iv": 0.02}
+        self.thresholds = {
+            "corr": 0.9,
+            "vif": 10.0,
+            "iv": 0.02,
+            "variance": 1e-4,
+            "variance_dom": 0.95,
+        }
         if missing_threshold is not None:
             self.thresholds["missing"] = missing_threshold
         if thresholds:
@@ -259,6 +265,7 @@ class Vassoura:
         self._vif_df_before: Optional[pd.DataFrame] = None
         self._vif_df: Optional[pd.DataFrame] = None
         self._iv_series: Optional[pd.Series] = None
+        self._variance_series: Optional[pd.Series] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
 
         # Map heurísticas → métodos
@@ -269,6 +276,7 @@ class Vassoura:
             "iv": self._apply_iv,
             "importance": self._apply_importance,
             "graph_cut": self._apply_graph_cut,
+            "variance": self._apply_variance,
         }
 
     # ------------------------------------------------------------------ #
@@ -465,6 +473,7 @@ class Vassoura:
         self._vif_df_before = None
         self._vif_df = None
         self._iv_series = None
+        self._variance_series = None
         self._history.clear()
 
     # ------------------------------------------------------------------ #
@@ -626,6 +635,31 @@ class Vassoura:
         removed = result.get("removed", [])
         if removed:
             self._drop(removed, reason=f"importance<{thr}")
+
+    def _apply_variance(self) -> None:
+        var_thr = self.thresholds.get("variance", 1e-4)
+        dom_thr = self.thresholds.get("variance_dom", 0.95)
+        if self.verbose:
+            print(
+                f"[Vassoura] Variance heuristic (var<{var_thr}, dom>{dom_thr})"
+            )
+
+        from .heuristics import variance
+
+        result = variance(
+            self._df_for_analysis(),
+            var_threshold=var_thr,
+            dom_threshold=dom_thr,
+            keep_cols=list(self.keep_cols),
+        )
+
+        self._variance_series = result.get("artefacts")
+        removed = [c for c in result.get("removed", []) if c in self.df_current.columns]
+        reason = f"variance<{var_thr}|dom>{dom_thr}"
+        if removed:
+            self._drop(removed, reason=reason)
+        else:
+            self._history.append({"cols": [], "reason": reason})
 
     def _apply_graph_cut(self) -> None:
         """

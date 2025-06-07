@@ -29,6 +29,7 @@ __all__ = [
     "importance",
     "graph_cut",
     "iv",
+    "variance",
 ]
 
 
@@ -194,5 +195,56 @@ def graph_cut(
         "removed": removed,
         "artefacts": G.subgraph(cover).copy(),
         "meta": {"corr_threshold": corr_threshold, "method": method},
+    }
+
+
+# --------------------------------------------------------------------- #
+# Variance: low variance or dominant category removal                    #
+# --------------------------------------------------------------------- #
+
+def variance(
+    df: pd.DataFrame,
+    *,
+    var_threshold: float = 1e-4,
+    dom_threshold: float = 0.95,
+    min_nonnull: int = 30,
+    keep_cols: List[str] | None = None,
+) -> Dict[str, Any]:
+    """Identify and remove columns with very low variance or dominant class."""
+
+    import numpy as np
+
+    keep = set(keep_cols or [])
+    metrics = {}
+    removed: List[str] = []
+
+    for col in df.columns:
+        s = df[col]
+        valid = s.dropna()
+        if valid.size < min_nonnull:
+            metrics[col] = np.nan
+            continue
+
+        if pd.api.types.is_numeric_dtype(s):
+            num = pd.to_numeric(valid, errors="coerce").replace([np.inf, -np.inf], np.nan)
+            var = float(num.var())
+            metrics[col] = var
+            if var < var_threshold and col not in keep:
+                removed.append(col)
+        else:
+            vc = valid.value_counts(normalize=True)
+            p_major = float(vc.iloc[0]) if not vc.empty else np.nan
+            metrics[col] = p_major
+            if (p_major >= dom_threshold or valid.nunique() <= 1) and col not in keep:
+                removed.append(col)
+
+    return {
+        "removed": removed,
+        "artefacts": pd.Series(metrics, name="variance_metric"),
+        "meta": {
+            "var_threshold": var_threshold,
+            "dom_threshold": dom_threshold,
+            "min_nonnull": min_nonnull,
+        },
     }
 
