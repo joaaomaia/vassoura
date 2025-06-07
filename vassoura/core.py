@@ -9,22 +9,20 @@ Refactored 2025-06-05
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable
-
-import warnings
+import logging
 import math
+import warnings
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-import logging
 
 from .correlacao import compute_corr_matrix
-from .vif import compute_vif
-from .utils import parse_verbose
-from .relatorio import generate_report
 from .heuristics import graph_cut
-
+from .relatorio import generate_report
+from .utils import parse_verbose
+from .vif import compute_vif
 
 # --------------------------------------------------------------------- #
 # Helper functions                                                      #
@@ -68,11 +66,12 @@ from .heuristics import graph_cut
 
 # Logger padrão (o usuário pode sobrescrever o handler/formato fora da lib)
 logger = logging.getLogger("vassoura.iv")
-if not logger.handlers:            # evita handlers duplicados em notebooks
+if not logger.handlers:  # evita handlers duplicados em notebooks
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(handler)
-logger.setLevel(logging.WARNING)   # default → não imprime nada “extra”
+logger.setLevel(logging.WARNING)  # default → não imprime nada “extra”
+
 
 def _compute_iv(
     series: pd.Series,
@@ -121,7 +120,7 @@ def _compute_iv(
     if pd.api.types.is_numeric_dtype(series):
         try:
             binned = pd.qcut(series, q=bins, duplicates="drop")
-        except ValueError:           # não há “bins” suficientes
+        except ValueError:  # não há “bins” suficientes
             log.debug(f"'{series.name}': qcut falhou – poucos valores distintos.")
             return np.nan
     else:
@@ -140,7 +139,7 @@ def _compute_iv(
     tab += smoothing
 
     dist_good = tab[0] / tab[0].sum()
-    dist_bad  = tab[1] / tab[1].sum()
+    dist_bad = tab[1] / tab[1].sum()
     woe = np.log(dist_good / dist_bad)
     iv = ((dist_good - dist_bad) * woe).sum()
 
@@ -233,7 +232,9 @@ class Vassoura:
         if not drop_ignored:
             self.keep_cols.update(self.ignore_cols)
         if drop_ignored and self.ignore_cols:
-            self.df_current.drop(columns=list(self.ignore_cols), errors="ignore", inplace=True)
+            self.df_current.drop(
+                columns=list(self.ignore_cols), errors="ignore", inplace=True
+            )
         self.engine = engine
         self.verbose, _ = parse_verbose(verbose, None)
         self.adaptive_sampling = adaptive_sampling
@@ -281,7 +282,9 @@ class Vassoura:
         if recompute:
             self.reset()
         if self.drop_ignored and self.ignore_cols:
-            self.df_current.drop(columns=list(self.ignore_cols), errors="ignore", inplace=True)
+            self.df_current.drop(
+                columns=list(self.ignore_cols), errors="ignore", inplace=True
+            )
         if self.thresholds.get("missing") is not None:
             self._apply_missing()
         for h in self.heuristics:
@@ -320,9 +323,15 @@ class Vassoura:
                 order.append(self.target_col)
             remaining = [c for c in self.df_current.columns if c not in order]
             self.df_current = self.df_current[order + remaining]
-            sort_cols = [c for c in (self.id_cols + self.date_cols) if c in self.df_current.columns]
+            sort_cols = [
+                c
+                for c in (self.id_cols + self.date_cols)
+                if c in self.df_current.columns
+            ]
             if sort_cols:
-                self.df_current = self.df_current.sort_values(sort_cols).reset_index(drop=True)
+                self.df_current = self.df_current.sort_values(sort_cols).reset_index(
+                    drop=True
+                )
         return self.df_current
 
     def remove_additional(self, columns: List[str]) -> None:
@@ -334,7 +343,12 @@ class Vassoura:
 
         if self._corr_matrix is None:
             base = self.df_original.drop(columns=[self.target_col], errors="ignore")
-            base = base.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
+            base = base.drop(
+                columns=list(
+                    set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
+                ),
+                errors="ignore",
+            )
             self._corr_matrix = compute_corr_matrix(
                 base,
                 method="auto",
@@ -347,7 +361,12 @@ class Vassoura:
 
         if self._corr_matrix_final is None:
             df_final = self.df_current.drop(columns=[self.target_col], errors="ignore")
-            df_final = df_final.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
+            df_final = df_final.drop(
+                columns=list(
+                    set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
+                ),
+                errors="ignore",
+            )
             self._corr_matrix_final = compute_corr_matrix(
                 df_final,
                 method="auto",
@@ -360,7 +379,12 @@ class Vassoura:
 
         if self._vif_df_before is None:
             try:
-                df_before = self.df_original.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
+                df_before = self.df_original.drop(
+                    columns=list(
+                        set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
+                    ),
+                    errors="ignore",
+                )
                 self._vif_df_before = compute_vif(
                     df_before,
                     target_col=self.target_col,
@@ -374,7 +398,12 @@ class Vassoura:
 
         if self._vif_df is None:
             try:
-                df_final = self.df_current.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
+                df_final = self.df_current.drop(
+                    columns=list(
+                        set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
+                    ),
+                    errors="ignore",
+                )
                 self._vif_df = compute_vif(
                     df_final,
                     target_col=self.target_col,
@@ -393,6 +422,10 @@ class Vassoura:
             "vif_before": self._vif_df_before,
             "vif_after": self._vif_df,
             "dropped_cols": self.dropped,
+            "id_cols": self.id_cols,
+            "date_cols": self.date_cols,
+            "ignore_cols": list(self.ignore_cols),
+            "history": self.history,
         }
 
         return generate_report(
@@ -404,6 +437,10 @@ class Vassoura:
             verbose=self.verbose,
             output_path=path,
             precomputed=precomputed,
+            id_cols=self.id_cols,
+            date_cols=self.date_cols,
+            ignore_cols=list(self.ignore_cols),
+            history=self.history,
         )
 
     def help(self) -> None:
@@ -420,7 +457,9 @@ class Vassoura:
         """Restaura sessão ao estado inicial (apaga caches e histórico)."""
         self.df_current = self.df_original.copy()
         if self.drop_ignored and self.ignore_cols:
-            self.df_current.drop(columns=list(self.ignore_cols), errors="ignore", inplace=True)
+            self.df_current.drop(
+                columns=list(self.ignore_cols), errors="ignore", inplace=True
+            )
         self._corr_matrix = None
         self._corr_matrix_final = None
         self._vif_df_before = None
@@ -467,8 +506,10 @@ class Vassoura:
             pairs = upper_tri.stack().loc[lambda s: s.abs() > thr]
             if pairs.empty:
                 break
-            step_limit = len(pairs) if self.n_steps is None else math.ceil(
-                len(pairs) / self.n_steps
+            step_limit = (
+                len(pairs)
+                if self.n_steps is None
+                else math.ceil(len(pairs) / self.n_steps)
             )
             removed_this_iter = 0
             for (var1, var2), corr_val in pairs.sort_values(
@@ -525,7 +566,11 @@ class Vassoura:
             worst = self._vif_df[self._vif_df["vif"] > thr]
             if worst.empty:
                 break
-            step_limit = 1 if self.vif_n_steps == 1 else max(1, math.ceil(len(worst) / self.vif_n_steps))
+            step_limit = (
+                1
+                if self.vif_n_steps == 1
+                else max(1, math.ceil(len(worst) / self.vif_n_steps))
+            )
             removed_this_iter = 0
             for _, row in worst.sort_values("vif", ascending=False).iterrows():
                 var = row["variable"]
@@ -597,7 +642,12 @@ class Vassoura:
         df_for_graph = self.df_current.copy()
         if self.target_col in df_for_graph.columns:
             df_for_graph = df_for_graph.drop(columns=[self.target_col])
-        df_for_graph = df_for_graph.drop(columns=list(set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)), errors="ignore")
+        df_for_graph = df_for_graph.drop(
+            columns=list(
+                set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
+            ),
+            errors="ignore",
+        )
 
         # 2) Selecionar somente colunas numéricas
         num_cols = df_for_graph.select_dtypes(include=[np.number]).columns.tolist()

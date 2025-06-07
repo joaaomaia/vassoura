@@ -22,6 +22,11 @@ import math
 from typing import List, Optional
 
 import matplotlib.pyplot as plt
+
+try:  # mplcursors é opcional
+    import mplcursors
+except Exception:  # pragma: no cover - ambiente pode não ter mplcursors
+    mplcursors = None
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -234,6 +239,8 @@ def plot_corr_heatmap(
     base_figsize: float = 0.45,
     min_size: int = 6,
     max_size: int = 20,
+    highlight_labels: bool = False,
+    corr_threshold: float = 0.0,
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
     """Plota *heat‑map* da matriz de correlação.
@@ -249,6 +256,11 @@ def plot_corr_heatmap(
         Paleta de cores.
     mask_upper : bool, default True
         Se ``True``, mascara o triângulo superior.
+    highlight_labels : bool, default False
+        Quando ``True`` adiciona rótulos apenas às células com
+        ``|corr| >= corr_threshold``. Útil para matrizes grandes.
+    corr_threshold : float
+        Limiar utilizado em ``highlight_labels``.
     base_figsize, min_size, max_size : float/int
         Encaminhados para ``figsize_from_matrix``.
     ax : matplotlib.axes.Axes | None
@@ -282,6 +294,30 @@ def plot_corr_heatmap(
         mask=mask,
         cbar_kws={"shrink": 0.8},
     )
+
+    if highlight_labels:
+        thr = abs(corr_threshold)
+        for i, row in enumerate(corr.index):
+            for j, col in enumerate(corr.columns):
+                val = corr.iloc[i, j]
+                if abs(val) >= thr:
+                    ax.text(
+                        j + 0.5,
+                        i + 0.5,
+                        format(val, fmt),
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                    )
+        if mplcursors is not None:  # pragma: no cover - apenas visual
+            cursor = mplcursors.cursor(ax.collections[0], hover=True)
+
+            @cursor.connect("add")
+            def _(sel):
+                i, j = map(int, sel.index)
+                var1 = corr.index[i]
+                var2 = corr.columns[j]
+                sel.annotation.set_text(f"{var1} × {var2} = {corr.iloc[i, j]:.2f}")
 
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
     ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
