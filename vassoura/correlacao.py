@@ -159,6 +159,7 @@ def compute_corr_matrix(
         data = df_work[num_cols].copy()
         if adaptive_sampling:
             data = maybe_sample(data)
+        fallback_to_pandas = False
         if engine == "dask":
             try:
                 import dask.dataframe as dd
@@ -169,6 +170,7 @@ def compute_corr_matrix(
                 corr = data_dd.corr(method="pearson").compute()
             else:
                 corr = data.corr(method=method)
+                fallback_to_pandas = True
         elif engine == "polars":
             try:
                 import polars as pl
@@ -178,14 +180,23 @@ def compute_corr_matrix(
                 corr = pl.from_pandas(data).corr().to_pandas()
             else:
                 corr = data.corr(method=method)
+                fallback_to_pandas = True
         else:
             corr = data.corr(method=method)
         if verbose:
-            LOGGER.info(
-                "Matriz de correlação %s calculada para %d " "variáveis numéricas",
-                method,
-                len(num_cols),
-            )
+            if fallback_to_pandas:
+                LOGGER.info(
+                    "Matriz de correlação %s calculada via pandas para %d variáveis numéricas (engine='%s' sem suporte)",
+                    method,
+                    len(num_cols),
+                    engine,
+                )
+            else:
+                LOGGER.info(
+                    "Matriz de correlação %s calculada para %d variáveis numéricas",
+                    method,
+                    len(num_cols),
+                )
         return corr
 
     if method == "cramer":
