@@ -61,9 +61,23 @@ def _pick_text_color(rgb: tuple[float, float, float]) -> str:
 def _plot_vif_barplot(vif_s: pd.Series, title: str, ax: plt.Axes) -> None:
     """Barplot de VIF com paleta *flare* e rótulos contrastantes."""
     pal = sns.color_palette("flare", len(vif_s))
-    sns.barplot(y=vif_s.index, x=vif_s.values, orient="h", palette=pal, ax=ax)
+    df_plot = vif_s.reset_index()
+    df_plot.columns = ["feature", "vif"]
+    
+    sns.barplot(
+        data=df_plot,
+        y="feature",
+        x="vif",
+        hue="feature",
+        palette=pal,
+        legend=False,
+        dodge=False,
+        orient="h",
+        ax=ax,
+    )
+    
     ax.set_title(title)
-    for bar, val in zip(ax.patches, vif_s.values):
+    for bar, val in zip(ax.patches, df_plot["vif"]):
         txt_col = _pick_text_color(bar.get_facecolor()[:3])
         ax.text(
             val * 0.01,

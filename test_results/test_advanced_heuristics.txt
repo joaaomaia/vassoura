@@ -1,0 +1,21 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
+configfile: pyproject.toml
+plugins: anyio-4.9.0
+collecting ... collected 5 items
+
+vassoura/tests/test_advanced_heuristics.py::test_psi_stability_removal PASSED [ 20%]
+vassoura/tests/test_advanced_heuristics.py::test_ks_separation PASSED    [ 40%]
+vassoura/tests/test_advanced_heuristics.py::test_perm_importance_keep_cols PASSED [ 60%]
+vassoura/tests/test_advanced_heuristics.py::test_partial_corr_cluster PASSED [ 80%]
+vassoura/tests/test_advanced_heuristics.py::test_drift_vs_target_leakage PASSED [100%]
+
+============================== warnings summary ===============================
+vassoura/tests/test_advanced_heuristics.py::test_drift_vs_target_leakage
+  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\heuristics.py:515: FutureWarning: Series.view is deprecated and will be removed in a future version. Use ``astype`` as an alternative to change the dtype.
+    date_ord = pd.to_datetime(df[date_col]).view("int64")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 5 passed, 1 warning in 3.48s =========================

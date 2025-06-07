@@ -9,4 +9,4 @@ collecting ... collected 2 items
 vassoura/tests/test_limpeza.py::test_clean_removes_correlated_variable PASSED [ 50%]
 vassoura/tests/test_limpeza.py::test_clean_keeps_unrelated_variable PASSED [100%]
 
-============================== 2 passed in 2.13s ==============================
+============================== 2 passed in 2.05s ==============================

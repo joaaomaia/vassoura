@@ -41,7 +41,7 @@ Thumbs.db
 # Docs (build local)
 site/
 docs/_build/
-imgs/olds/
+imgs/olds
 bin/
 #test_results/
 run_all_tests.sh
