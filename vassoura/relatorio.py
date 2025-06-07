@@ -22,16 +22,16 @@ import io
 import logging
 import textwrap
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
-from .utils import search_dtypes, figsize_from_matrix, suggest_corr_method
-from .vif import compute_vif
 from .limpeza import clean
+from .utils import figsize_from_matrix, search_dtypes, suggest_corr_method
+from .vif import compute_vif
 
 __all__ = ["generate_report"]
 
@@ -94,6 +94,10 @@ def generate_report(
     verbose: bool = True,
     style: str = "html",  # "html" | "md"
     precomputed: Optional[Dict[str, Any]] = None,
+    id_cols: Optional[List[str]] = None,
+    date_cols: Optional[List[str]] = None,
+    ignore_cols: Optional[List[str]] = None,
+    history: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Gera relatório de correlação/multicolinearidade e grava em output_path.
@@ -130,6 +134,11 @@ def generate_report(
         Se True, imprime logs via logger "vassoura".
     style : {"html", "md"}
         Define o formato do relatório (HTML completo ou Markdown).
+    id_cols, date_cols, ignore_cols : list[str] | None
+        Listas de colunas identificadoras, de data e ignoradas para exibir
+        no painel-resumo.
+    history : list[dict] | None
+        Registro de remoções, usado na tabela de audit trail.
 
     Retorna
     -------
@@ -178,6 +187,10 @@ def generate_report(
         vif_before = precomputed.get("vif_before")
         corr_after = precomputed.get("corr_after")
         vif_after = precomputed.get("vif_after")
+        id_cols = precomputed.get("id_cols", id_cols or [])
+        date_cols = precomputed.get("date_cols", date_cols or [])
+        ignore_cols = precomputed.get("ignore_cols", ignore_cols or [])
+        history = precomputed.get("history", history)
     else:
         df_clean = None
         dropped_cols = []
@@ -185,6 +198,10 @@ def generate_report(
         vif_before = None
         corr_after = None
         vif_after = None
+        id_cols = id_cols or []
+        date_cols = date_cols or []
+        ignore_cols = ignore_cols or []
+        history = history or []
 
     # 3) Cálculo de correlação ANTES da limpeza
     if corr_before is None:
@@ -266,12 +283,15 @@ def generate_report(
     fig_corr_before, ax_cb = plt.subplots(
         figsize=figsize_from_matrix(len(corr_before), base=heatmap_base_size)
     )
+    before_large = len(corr_before.columns) > 40
     plot_corr_heatmap(
         corr_before,
         title=f"Correlação antes da limpeza ({corr_method_eff.capitalize()})",
         ax=ax_cb,
-        annot=heatmap_labels,
+        annot=False if before_large else heatmap_labels,
         fmt=".2f",
+        highlight_labels=before_large,
+        corr_threshold=corr_threshold,
     )
     img_corr_before = _fig_to_base64(fig_corr_before)
 
@@ -282,12 +302,15 @@ def generate_report(
         fig_corr_after, ax_ca = plt.subplots(
             figsize=figsize_from_matrix(len(corr_after), base=heatmap_base_size)
         )
+        after_large = len(corr_after.columns) > 40
         plot_corr_heatmap(
             corr_after,
             title=f"Correlação após limpeza ({corr_method_eff.capitalize()})",
             ax=ax_ca,
-            annot=heatmap_labels,
+            annot=False if after_large else heatmap_labels,
             fmt=".2f",
+            highlight_labels=after_large,
+            corr_threshold=corr_threshold,
         )
         img_corr_after = _fig_to_base64(fig_corr_after)
 
@@ -309,41 +332,84 @@ def generate_report(
             <head>
                 <meta charset="utf-8">
                 <title>Relatório Vassoura</title>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-7MUo45l42UuDGuDX6zF98MXcEEoJacV8LjKzNoh+piQTWDpKSqwdt5Pzz36E6BjLsnGB2XjBt2PTP4MLs5q0Wg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
                 <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                h1, h2, h3 {{ color: #023059; }}
-                p {{ max-width: 800px; line-height: 1.4; }}
-                img {{ max-width: 100%; height: auto; margin-bottom: 20px; }}
-                .section {{ margin-bottom: 40px; }}
+/* Paleta suave inspirado em design systems financeiros */
+:root {{
+  --bg: #f8f9fa;
+  --card: #ffffff;
+  --primary: #0d6efd;
+  --success: #198754;
+  --warning: #ffc107;
+  --danger: #dc3545;
+  --text: #212529;
+  --muted: #6c757d;
+  --radius: 8px;
+  --shadow: 0 2px 6px rgba(0,0,0,.05);
+  --mono: "Fira Code", monospace;
+}}
+
+body {{background:var(--bg);color:var(--text);font:15px/1.5 "Inter",sans-serif;}}
+h1,h2,h3{{color:var(--primary);margin:0 0 .6em}}
+.section{{margin-bottom:48px;padding:32px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);}}
+.feature-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;}}
+.feature-grid div{{padding:6px 10px;background:var(--bg);border-radius:var(--radius);}}
+.badge{{padding:2px 6px;border-radius:4px;font-size:.75rem;font-family:var(--mono)}}
+.badge.num{{background:var(--success);color:#fff;}}
+.badge.cat{{background:var(--warning);color:#000;}}
+.pill{{display:inline-flex;align-items:center;gap:6px;margin-right:8px;margin-bottom:8px;background:var(--primary);color:#fff;padding:6px 12px;border-radius:99px;font-weight:500;box-shadow:var(--shadow);}}
+.pill i{{opacity:.8}}
+table.audit{{width:100%;border-collapse:collapse;font-size:.9rem;}}
+table.audit th,table.audit td{{padding:6px 8px;border-bottom:1px solid #e1e6eb;}}
+table.audit th{{background:var(--bg);text-align:left;}}
+img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
+@media(max-width:700px){{.section{{padding:20px}}.feature-grid{{grid-template-columns:1fr}}}}
                 </style>
             </head>
             <body>
                 <h1>Relatório de Correlação & Multicolinearidade – Vassoura</h1>
-
+                <nav style="margin-bottom:16px"><a href="#tipos">Tipos</a> · <a href="#heatmaps">Heatmaps</a> · <a href="#vif">VIF</a> · <a href="#audit">Audit trail</a></nav>
                 <div class="section">
+            """
+        )
+
+        def _pill(icon: str, items: List[str], label: str, color: str) -> str:
+            full = ", ".join(items)
+            short = ", ".join(items[:10]) + ("..." if len(items) > 10 else "")
+            if not items:
+                short = "<i>nenhuma</i>"
+            return (
+                f"<span class='pill' style='background:{color}'><i class='{icon}'></i>"
+                f"{len(items)} {label}: <span title='{full}'>{short}</span></span>"
+            )
+
+        html += _pill("fa-solid fa-id-card", id_cols, "ID Cols", "var(--primary)")
+        html += _pill(
+            "fa-solid fa-calendar-day", date_cols, "Date Cols", "var(--success)"
+        )
+        html += _pill("fa-solid fa-eye-slash", ignore_cols, "Ignored", "var(--warning)")
+        html += _pill("fa-solid fa-trash-alt", dropped_cols, "Dropped", "var(--danger)")
+        html += "</div>"
+
+        html += textwrap.dedent(
+            """
+                <div class="section" id="conceitos">
                 <h2>Conceitos</h2>
                 <p><strong>Correlação</strong> mede a relação linear (ou monotônica, no caso de Spearman) entre pares de variáveis. Valores próximos de +1 ou -1 indicam forte relação.</p>
                 <p><strong>Multicolinearidade</strong> ocorre quando uma variável pode ser prevista (quase) perfeitamente a partir de uma combinação linear de outras variáveis. A presença de multicolinearidade alta prejudica a estabilidade e interpretação de coeficientes em modelos lineares.</p>
                 </div>
-
-                <div class="section">
+                <div class="section" id="tipos">
                 <h2>1. Tipos de Variáveis</h2>
-                <h3>Numéricas ({len(num_cols)})</h3>
-                <ul>
+                <div class="feature-grid">
             """
         )
         for col in num_cols:
-            html += f"<li>{col}</li>\n"
-        if not num_cols:
-            html += "<li><i>nenhuma</i></li>\n"
-        html += "</ul>\n"
-
-        html += "<h3>Categóricas ({})</h3>\n<ul>\n".format(len(cat_cols))
+            html += f"<div>{col} <span class='badge num'>num</span></div>\n"
         for col in cat_cols:
-            html += f"<li>{col}</li>\n"
-        if not cat_cols:
-            html += "<li><i>nenhuma</i></li>\n"
-        html += "</ul>\n</div>\n"
+            html += f"<div>{col} <span class='badge cat'>cat</span></div>\n"
+        if not num_cols and not cat_cols:
+            html += "<div><i>nenhuma coluna detectada</i></div>\n"
+        html += "</div></div>\n"
 
         # Justificativa do método de correlação
         html += textwrap.dedent(
@@ -358,7 +424,7 @@ def generate_report(
         # Seção de correlação
         html += textwrap.dedent(
             f"""
-            <div class="section">
+            <div class="section" id="heatmaps">
                 <h2>3. Heatmaps de Correlação</h2>
                 <h3>Antes da Limpeza ({corr_method_eff.capitalize()})</h3>
                 <img src="{img_corr_before}" alt="Correlação antes">
@@ -378,7 +444,7 @@ def generate_report(
         # Seção de VIF
         html += textwrap.dedent(
             f"""
-            <div class="section">
+            <div class="section" id="vif">
                 <h2>4. Variance Inflation Factor (VIF)</h2>
                 <h3>Antes da Limpeza</h3>
                 <img src="{img_vif_before}" alt="VIF antes">
@@ -409,6 +475,26 @@ def generate_report(
         else:
             html += "<li><i>Nenhuma variável removida</i></li>\n"
         html += "</ul>\n</div>\n"
+
+        if dropped_cols and history:
+
+            def _split_reason(r: str) -> tuple[str, str]:
+                for sep in (">", "<"):
+                    if sep in r:
+                        h, m = r.split(sep, 1)
+                        return h, sep + m
+                return r, ""
+
+            html += '<div class="section" id="audit">'
+            html += "<h2>Audit trail</h2>"
+            html += '<table class="audit"><thead><tr><th>Colunas</th><th>Heurística</th><th>Motivo</th></tr></thead><tbody>'
+            for step in history:
+                if not step.get("cols"):
+                    continue
+                cols = ", ".join(step["cols"])
+                heur, mot = _split_reason(step.get("reason", ""))
+                html += f"<tr><td>{cols}</td><td>{heur}</td><td>{mot}</td></tr>"
+            html += "</tbody></table></div>"
 
         html += "</body></html>\n"
         output_path.write_text(html, encoding="utf-8")
