@@ -38,10 +38,13 @@ def test_generate_report_modern(tmp_path):
     html = path.read_text()
     import re
 
-    m = re.search(
-        r'<div class="vif-grid"><img src="data:image/[^;]+;base64,([^" ]+)', html
+    section = re.search(
+        r'<div class="vif-grid">(.*?)</div>', html, flags=re.S
     )
-    assert m and len(m.group(1)) > 20000
+    assert section
+    imgs = re.findall(r'<img src="data:image/[^;]+;base64,([^" ]+)', section.group(1))
+    assert len(imgs) == 2
+    assert all(len(i) > 10000 for i in imgs)
     assert html.count('<div class="vif-grid">') == 1
     assert "KS Separation" not in html
     assert "flare_" in html
