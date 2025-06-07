@@ -13,3 +13,7 @@ Requires `xgboost` and `shap` installed.
 ### `graph_cut(df, corr_threshold=0.9, keep_cols=None, method='pearson')`
 Build a correlation graph and compute a minimal vertex cover to determine
 which variables to drop.
+
+### `variance(df, var_threshold=1e-4, dom_threshold=0.95, min_nonnull=30, keep_cols=None)`
+Drop features with very low numerical variance or with a single dominant
+category.

@@ -40,7 +40,7 @@ Caso esses pacotes não estejam disponíveis, o Vassoura faz *fallback* elegante
 | **`Vassoura` (classe)** | Sessão *stateful* que concentra todo o fluxo de limpeza   | cache inteligente, logs granulares, suporte a `id_cols`, `date_cols`, `ignore_cols`, remoção fracionada (`n_steps`, `vif_n_steps`) |
 | **Correlação**          | `compute_corr_matrix`, `plot_corr_heatmap`                | Pearson, Spearman, Cramér‑V; amostragem adaptativa; *heat‑maps* auto‑dimensionados                                                 |
 | **VIF**                 | `compute_vif`, `remove_high_vif`                          | Algoritmo NumPy puro (fallback) ou Statsmodels; compatível com `polars` e `dask`                                                   |
-| **Heurísticas Plug‑in** | `corr`, `vif`, `iv`, `importance`, `graph_cut`, `missing` | escolha via parâmetro; **graph‑cut** resolve correlações complexas em grafo mínimo                                                 |
+| **Heurísticas Plug‑in** | `corr`, `vif`, `iv`, `importance`, `graph_cut`, `missing`, `variance` | escolha via parâmetro; **graph‑cut** resolve correlações complexas em grafo mínimo                                                 |
 | **Relatórios**          | `generate_report`                                         | HTML ou Markdown com seções ilustradas, imagens embutidas, lista de variáveis removidas                                            |
 | **Autocorrelação**      | `compute_panel_acf`, `analisar_autocorrelacao`            | ACF por painel (contrato, cliente, etc.) com interpretação automática                                                              |
 
@@ -76,8 +76,8 @@ vs = Vassoura(
     target_col="ever90m12",
     id_cols=["cpf"],             # preserva ordenação por CPF
     date_cols=["AnoMesReferencia"],
-    heuristics=["corr", "vif", "iv", "graph_cut"],
-    thresholds={"corr": 0.9, "vif": 8, "iv": 0.02},
+    heuristics=["corr", "vif", "iv", "graph_cut", "variance"],
+    thresholds={"corr": 0.9, "vif": 8, "iv": 0.02, "variance": 1e-4},
     engine="polars",
     n_steps=3,                   # 3 rodadas para correlação
     vif_n_steps=1,
