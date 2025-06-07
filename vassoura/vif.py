@@ -136,7 +136,7 @@ def compute_vif(
     rows_after = len(data)
     if verbose and rows_after < rows_before:
         LOGGER.info(
-            "Descartando %d linha(s) com NaN/inf para cálculo de VIF",
+            "Desconsiderando %d linha(s) com NaN/inf para cálculo de VIF",
             rows_before - rows_after,
         )
     if adaptive_sampling:

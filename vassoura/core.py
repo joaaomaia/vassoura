@@ -17,6 +17,7 @@ import math
 
 import numpy as np
 import pandas as pd
+import logging
 
 from .correlacao import compute_corr_matrix
 from .vif import compute_vif
@@ -30,40 +31,120 @@ from .heuristics import graph_cut
 # --------------------------------------------------------------------- #
 
 
-def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> float:
-    """Computes Information Value using quantile binning (numeric) or
-    category grouping (categorical). Very light implementation – for
-    production we may migrate to `scorecardpy` or `optbinning`.
-    """
-    # Ensure target has exactly two classes
-    uniques = target.dropna().unique()
-    if len(uniques) != 2:
-        warnings.warn("Target must be binary (0/1) for IV calculation.")
-        return 0.0
-    # Map valores arbitrários → {0,1}
-    mapping = {uniques[0]: 0, uniques[1]: 1}
-    target_num = target.map(mapping)
+# def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> float:
+#     """Computes Information Value using quantile binning (numeric) or
+#     category grouping (categorical). Very light implementation – for
+#     production we may migrate to `scorecardpy` or `optbinning`.
+#     """
+#     # Ensure target has exactly two classes
+#     uniques = target.dropna().unique()
+#     if len(uniques) != 2:
+#         warnings.warn("Target must be binary (0/1) for IV calculation.")
+#         return 0.0
+#     # Map valores arbitrários → {0,1}
+#     mapping = {uniques[0]: 0, uniques[1]: 1}
+#     target_num = target.map(mapping)
 
-    if series.dtype.kind in "bifc":
-        # Numeric – quantile bins (duplicates handled gracefully)
+#     if series.dtype.kind in "bifc":
+#         # Numeric – quantile bins (duplicates handled gracefully)
+#         try:
+#             binned = pd.qcut(series, q=bins, duplicates="drop")
+#         except ValueError:
+#             # Constant series ou valores únicos insuficientes
+#             return 0.0
+#     else:
+#         binned = series.astype("category")
+
+#     tab = pd.crosstab(binned, target_num)
+#     if tab.shape[1] != 2:
+#         warnings.warn("Target must be binary (0/1) for IV calculation.")
+#         return 0.0
+#     tab = tab.rename(columns={0: "good", 1: "bad"}).replace(0, 0.5)  # suavização
+#     dist_good = tab["good"] / tab["good"].sum()
+#     dist_bad = tab["bad"] / tab["bad"].sum()
+#     woe = np.log(dist_good / dist_bad)
+#     iv = ((dist_good - dist_bad) * woe).sum()
+#     return iv
+
+# Logger padrão (o usuário pode sobrescrever o handler/formato fora da lib)
+logger = logging.getLogger("vassoura.iv")
+if not logger.handlers:            # evita handlers duplicados em notebooks
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(handler)
+logger.setLevel(logging.WARNING)   # default → não imprime nada “extra”
+
+def _compute_iv(
+    series: pd.Series,
+    target: pd.Series,
+    *,
+    bins: int = 10,
+    min_nonnull: int = 30,
+    smoothing: float = 0.5,
+    logger_: Optional[logging.Logger] = None,
+) -> float:
+    """
+    Information Value (IV) para uma coluna.
+
+    Parâmetros
+    ----------
+    series : pd.Series
+        Feature candidata.
+    target : pd.Series
+        Coluna binária (0/1).
+    bins : int, opcional (default = 10)
+        Número de quantis (apenas p/ numéricas).
+    min_nonnull : int, opcional (default = 30)
+        Se a coluna tiver menos de `min_nonnull` valores não nulos
+        o IV não é calculado (retorna np.nan).
+    smoothing : float, opcional (default = 0.5)
+        Valor somado para suavizar contagens 0.
+    logger_ : logging.Logger ou None
+        Logger a ser usado. Se None, usa o logger padrão.
+    """
+    log = logger_ or logger
+
+    # -------- validações rápidas ------------------------------------------
+    uniq_target = target.dropna().unique()
+    if set(uniq_target) != {0, 1}:
+        raise ValueError("Target precisa conter exatamente as classes 0 e 1.")
+
+    if series.count() < min_nonnull:
+        log.debug(f"'{series.name}': menos de {min_nonnull} valores não-nulos.")
+        return np.nan
+
+    if series.nunique(dropna=False) == 1:
+        log.debug(f"'{series.name}': coluna constante.")
+        return np.nan
+
+    # -------- binning ------------------------------------------------------
+    if pd.api.types.is_numeric_dtype(series):
         try:
             binned = pd.qcut(series, q=bins, duplicates="drop")
-        except ValueError:
-            # Constant series ou valores únicos insuficientes
-            return 0.0
+        except ValueError:           # não há “bins” suficientes
+            log.debug(f"'{series.name}': qcut falhou – poucos valores distintos.")
+            return np.nan
     else:
         binned = series.astype("category")
 
-    tab = pd.crosstab(binned, target_num)
-    if tab.shape[1] != 2:
-        warnings.warn("Target must be binary (0/1) for IV calculation.")
-        return 0.0
-    tab = tab.rename(columns={0: "good", 1: "bad"}).replace(0, 0.5)  # suavização
-    dist_good = tab["good"] / tab["good"].sum()
-    dist_bad = tab["bad"] / tab["bad"].sum()
+    # -------- crosstab & IV -----------------------------------------------
+    tab = pd.crosstab(binned, target, dropna=False)
+    # garante ambas as colunas
+    tab = tab.reindex(columns=[0, 1], fill_value=0)
+
+    if (tab[0] == 0).all() or (tab[1] == 0).all():
+        log.debug(f"'{series.name}': pelo menos um bin sem ambas as classes.")
+        return np.nan
+
+    # suavização para evitar log(0)
+    tab += smoothing
+
+    dist_good = tab[0] / tab[0].sum()
+    dist_bad  = tab[1] / tab[1].sum()
     woe = np.log(dist_good / dist_bad)
     iv = ((dist_good - dist_bad) * woe).sum()
-    return iv
+
+    return float(iv)
 
 
 # --------------------------------------------------------------------- #
