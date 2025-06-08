@@ -49,7 +49,8 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
                  save_path: str | pathlib.Path | None = None,
                  random_state: int = 0,
                  logger: logging.Logger | None = None):
-        self.strategy = strategy.lower() if strategy else None
+        # store raw parameter for scikit-learn compatibility
+        self.strategy = strategy
         self.serialize = serialize
         self.save_path = save_path
         self.shapiro_p_val = shapiro_p_val
@@ -134,25 +135,26 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     # ------------------------------------------------------------------
     def fit(self, X, y=None):
         X_df = pd.DataFrame(X)
+        strategy = self.strategy.lower() if self.strategy else None
 
-        if self.strategy not in {'auto', 'standard', 'robust',
-                                 'minmax', 'quantile', None}:
+        if strategy not in {'auto', 'standard', 'robust',
+                            'minmax', 'quantile', None}:
             raise ValueError(f"strategy '{self.strategy}' não suportada.")
 
         for col in X_df.columns:
             # --- seleção do scaler -----------------------------------
-            if self.strategy == 'auto':
+            if strategy == 'auto':
                 scaler, stats = self._choose_auto(X_df[col])
-            elif self.strategy == 'standard':
+            elif strategy == 'standard':
                 scaler = StandardScaler()
                 stats  = dict(reason='global-standard', scaler='StandardScaler')
-            elif self.strategy == 'robust':
+            elif strategy == 'robust':
                 scaler = RobustScaler()
                 stats  = dict(reason='global-robust', scaler='RobustScaler')
-            elif self.strategy == 'minmax':
+            elif strategy == 'minmax':
                 scaler = MinMaxScaler()
                 stats  = dict(reason='global-minmax', scaler='MinMaxScaler')
-            elif self.strategy == 'quantile':
+            elif strategy == 'quantile':
                 scaler = QuantileTransformer(output_distribution='normal',
                                              random_state=self.random_state)
                 stats  = dict(reason='global-quantile', scaler='QuantileTransformer')
