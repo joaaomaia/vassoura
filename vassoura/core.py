@@ -181,8 +181,11 @@ class Vassoura:
     heuristics : list[str] | None
         Sequência de heurísticas a executar. Valores suportados:
         `'corr'`, `'vif'`, `'iv'`, `'importance'`, `'graph_cut'`, `'variance'`.
-    thresholds : dict[str, float] | None
-        Dicionário de limites por heurística, ex: `{'corr':0.9, 'vif':10, 'iv':0.02, 'variance':1e-4}`.
+    params : dict[str, Any] | None
+        Parâmetros de configuração das heurísticas (limiares, modelos, sample_frac etc).
+        Exemplos: `{'corr':0.9, 'vif':10, 'importance': {'sample_frac':0.7}}`.
+    sample_weight : pandas.Series | None
+        Vetor de pesos amostrais usado em heurísticas que suportam o recurso.
     missing_threshold : float | None
         Se definido, remove colunas com proporção de valores ausentes acima
         desse limite antes das outras heurísticas.
@@ -214,7 +217,8 @@ class Vassoura:
         target_col: str | None = None,
         keep_cols: Optional[List[str]] = None,
         heuristics: Optional[List[str]] = None,
-        thresholds: Optional[Dict[str, float]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        sample_weight: Optional[pd.Series] = None,
         missing_threshold: Optional[float] = None,
         engine: str = "pandas",
         verbose: str | bool = "basic",
@@ -254,7 +258,7 @@ class Vassoura:
 
         self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
         # Valores padrão, podem ser sobrescritos
-        self.thresholds = {
+        self.params = {
             "corr": 0.9,
             "vif": 10.0,
             "iv": 0.02,
@@ -268,9 +272,10 @@ class Vassoura:
             "drift_leak_leak": 0.5,
         }
         if missing_threshold is not None:
-            self.thresholds["missing"] = missing_threshold
-        if thresholds:
-            self.thresholds.update(thresholds)
+            self.params["missing"] = missing_threshold
+        if params:
+            self.params.update(params)
+        self.sample_weight = sample_weight
 
         # Caches internos
         self._corr_matrix: Optional[pd.DataFrame] = None
@@ -284,6 +289,8 @@ class Vassoura:
         self._perm_series: Optional[pd.Series] = None
         self._partial_graph: Any = None
         self._drift_leak_df: Optional[pd.DataFrame] = None
+        self._importance_df: Optional[pd.DataFrame] = None
+        self._importance_meta: Optional[Dict[str, Any]] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
 
         # Map heurísticas → métodos
@@ -316,7 +323,7 @@ class Vassoura:
             self.df_current.drop(
                 columns=list(self.ignore_cols), errors="ignore", inplace=True
             )
-        if self.thresholds.get("missing") is not None:
+        if self.params.get("missing") is not None:
             self._apply_missing()
         for h in self.heuristics:
             func = self._heuristic_funcs.get(h)
@@ -457,6 +464,8 @@ class Vassoura:
             "perm_series": self._perm_series,
             "partial_graph": self._partial_graph,
             "drift_leak_df": self._drift_leak_df,
+            "importance_df": self._importance_df,
+            "importance_meta": self._importance_meta,
             "dropped_cols": self.dropped,
             "id_cols": self.id_cols,
             "date_cols": self.date_cols,
@@ -468,8 +477,8 @@ class Vassoura:
             self.df_original,
             target_col=self.target_col,
             keep_cols=list(self.keep_cols),
-            corr_threshold=self.thresholds.get("corr"),
-            vif_threshold=self.thresholds.get("vif"),
+            corr_threshold=self.params.get("corr"),
+            vif_threshold=self.params.get("vif"),
             verbose=self.verbose,
             output_path=path,
             precomputed=precomputed,
@@ -507,13 +516,15 @@ class Vassoura:
         self._perm_series = None
         self._partial_graph = None
         self._drift_leak_df = None
+        self._importance_df = None
+        self._importance_meta = None
         self._history.clear()
 
     # ------------------------------------------------------------------ #
     # Heurísticas                                                        #
     # ------------------------------------------------------------------ #
     def _apply_missing(self) -> None:
-        thr = self.thresholds.get("missing")
+        thr = self.params.get("missing")
         if thr is None:
             return
         if self.verbose:
@@ -524,7 +535,7 @@ class Vassoura:
         self._drop(cols, reason=f"missing>{thr}")
 
     def _apply_corr(self) -> None:
-        thr = self.thresholds.get("corr", 0.9)
+        thr = self.params.get("corr", 0.9)
         if self.verbose:
             msg = f"[Vassoura] Corr heuristic (thr={thr})"
             if self.n_steps is not None:
@@ -575,7 +586,7 @@ class Vassoura:
             iteration += 1
 
     def _apply_vif(self) -> None:
-        thr = self.thresholds.get("vif", 10.0)
+        thr = self.params.get("vif", 10.0)
         df_work = self._df_for_analysis()
         # Identificar colunas numéricas previstas para VIF
         num_cols = df_work.select_dtypes(include=[np.number]).columns.tolist()
@@ -626,7 +637,7 @@ class Vassoura:
                     break
 
     def _apply_iv(self) -> None:
-        thr = self.thresholds.get("iv", 0.02)
+        thr = self.params.get("iv", 0.02)
         if self.target_col is None:
             warnings.warn("IV heuristic skipped: target_col not provided.")
             return
@@ -656,9 +667,9 @@ class Vassoura:
             warnings.warn("Importance heuristic skipped: target_col not provided.")
             return
 
-        thr = self.thresholds.get("importance", 0.2)
+        params = self.params.get("importance", {})
         if self.verbose:
-            print(f"[Vassoura] Importance heuristic (drop_lowest={thr})")
+            print("[Vassoura] Importance heuristic")
 
         from .heuristics import importance
 
@@ -666,20 +677,23 @@ class Vassoura:
             self.df_current,
             target_col=self.target_col,
             keep_cols=list(self.keep_cols),
-            drop_lowest=thr,
+            params=params,
+            sample_weight=self.sample_weight,
         )
 
-        removed = result.get("removed", [])
+        self._importance_df = result.get("importances")
+        self._importance_meta = result.get("meta")
+        removed = [c for c in result.get("removed", []) if c in self.df_current.columns]
         if removed:
-            self._drop(removed, reason=f"importance<{thr}")
+            self._drop(removed, reason="importance<shadow")
+        else:
+            self._history.append({"cols": [], "reason": "importance<shadow"})
 
     def _apply_variance(self) -> None:
-        var_thr = self.thresholds.get("variance", 1e-4)
-        dom_thr = self.thresholds.get("variance_dom", 0.95)
+        var_thr = self.params.get("variance", 1e-4)
+        dom_thr = self.params.get("variance_dom", 0.95)
         if self.verbose:
-            print(
-                f"[Vassoura] Variance heuristic (var<{var_thr}, dom>{dom_thr})"
-            )
+            print(f"[Vassoura] Variance heuristic (var<{var_thr}, dom>{dom_thr})")
 
         from .heuristics import variance
 
@@ -705,7 +719,7 @@ class Vassoura:
         2) Filtra apenas colunas numéricas.
         3) Chama graph_cut(), obtém lista 'removed' e repassa a _drop().
         """
-        thr = self.thresholds.get("graph_cut", 0.9)
+        thr = self.params.get("graph_cut", 0.9)
         if self.verbose:
             print(f"[Vassoura] Graph-cut heuristic (thr={thr})")
 
@@ -750,7 +764,7 @@ class Vassoura:
         params = {
             "date_col": "date_col_stability",
             "window": ("2024-01", "2025-01"),
-            "psi_thr": self.thresholds.get("psi_stability", 0.25),
+            "psi_thr": self.params.get("psi_stability", 0.25),
         }
         result = psi_stability(
             self.df_current, keep_cols=list(self.keep_cols), **params
@@ -762,7 +776,7 @@ class Vassoura:
         if self.target_col is None:
             warnings.warn("ks_separation skipped: target_col not provided.")
             return
-        thr = self.thresholds.get("ks_separation", 0.05)
+        thr = self.params.get("ks_separation", 0.05)
         result = ks_separation(
             self.df_current,
             target_col=self.target_col,
@@ -776,7 +790,7 @@ class Vassoura:
         if self.target_col is None:
             warnings.warn("perm_importance_lgbm skipped: target_col not provided.")
             return
-        thr = self.thresholds.get("perm_importance", 0.2)
+        thr = self.params.get("perm_importance", 0.2)
         result = perm_importance_lgbm(
             self.df_current,
             target_col=self.target_col,
@@ -787,7 +801,7 @@ class Vassoura:
         self._drop(result.get("removed", []), reason=f"perm_imp<{thr}")
 
     def _apply_partial_corr_cluster(self) -> None:
-        thr = self.thresholds.get("partial_corr_cluster", 0.6)
+        thr = self.params.get("partial_corr_cluster", 0.6)
         result = partial_corr_cluster(
             self._df_for_analysis(),
             corr_thr=thr,
@@ -803,8 +817,8 @@ class Vassoura:
         if self.target_col is None:
             warnings.warn("drift_vs_target_leakage skipped – target_col ausente")
             return
-        drift_thr = self.thresholds.get("drift_leak_drift", 0.3)
-        leak_thr = self.thresholds.get("drift_leak_leak", 0.5)
+        drift_thr = self.params.get("drift_leak_drift", 0.3)
+        leak_thr = self.params.get("drift_leak_leak", 0.5)
         result = drift_vs_target_leakage(
             self.df_current,
             date_col=self.date_cols[0],

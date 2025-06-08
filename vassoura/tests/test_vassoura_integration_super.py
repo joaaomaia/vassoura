@@ -5,6 +5,7 @@ from vassoura.core import Vassoura
 from vassoura.autocorrelacao import compute_panel_acf
 from vassoura.analisador import analisar_autocorrelacao
 
+
 def _make_complex_data(n_contracts=50, months=24):
     rng = np.random.default_rng(42)
     rows = []
@@ -19,26 +20,29 @@ def _make_complex_data(n_contracts=50, months=24):
             x2 = x1 * 0.9 + rng.normal(scale=0.1)
             x3 = rng.normal()
             target = int((x1 + x3 + rng.normal()) > 0)
-            rows.append({
-                "Contrato": cid,
-                "AnoMes": ym,
-                "x1": x1,
-                "x2": x2,
-                "x3": x3,
-                "target": target
-            })
+            rows.append(
+                {
+                    "Contrato": cid,
+                    "AnoMes": ym,
+                    "x1": x1,
+                    "x2": x2,
+                    "x3": x3,
+                    "target": target,
+                }
+            )
     return pd.DataFrame(rows)
+
 
 def test_vassoura_pipeline_completo(tmp_path):
     df = _make_complex_data()
-    
+
     vs = Vassoura(
         df,
         target_col="target",
         keep_cols=["x1"],
         heuristics=["corr", "vif", "iv"],
-        thresholds={"corr": 0.85, "vif": 5, "iv": 0.01, "missing": 0.2},
-        verbose="none"
+        params={"corr": 0.85, "vif": 5, "iv": 0.01, "missing": 0.2},
+        verbose="none",
     )
 
     df_clean = vs.run(recompute=True)
@@ -58,9 +62,7 @@ def test_vassoura_pipeline_completo(tmp_path):
     acf_panel = compute_panel_acf(
         df, value_col="x1", time_col="AnoMes", id_col="Contrato", nlags=6, min_periods=6
     )
-    acf_analysis = analisar_autocorrelacao(
-        acf_panel, feature_name="x1", verbose="none"
-    )
+    acf_analysis = analisar_autocorrelacao(acf_panel, feature_name="x1", verbose="none")
 
     # Verificações da análise de autocorrelação
     assert "acf_max" in acf_analysis
