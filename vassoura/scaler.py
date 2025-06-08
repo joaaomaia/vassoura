@@ -44,28 +44,26 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     # ------------------------------------------------------------------
     def __init__(self,
                  strategy: str = 'auto',
-                 shapiro_p_val: float = 0.01, # se aumentar fica mais restritiva a escolha de StandardScaler()
+                 shapiro_p_val: float = 0.01,
                  serialize: bool = False,
                  save_path: str | pathlib.Path | None = None,
                  random_state: int = 0,
                  logger: logging.Logger | None = None):
         self.strategy = strategy.lower() if strategy else None
         self.serialize = serialize
-        self.save_path = pathlib.Path(save_path or "scalers.pkl")
+        self.save_path = save_path
         self.shapiro_p_val = shapiro_p_val
         self.random_state = random_state
+        self.logger = logger
+
+        self._save_path = pathlib.Path(save_path or "scalers.pkl")
+        self._logger = logger or logging.getLogger(self.__class__.__name__)
+        if not self._logger.handlers:
+            logging.basicConfig(level=logging.INFO,
+                                format="%(levelname)s: %(message)s")
 
         self.scalers_: dict[str, BaseEstimator] = {}
         self.report_:  dict[str, dict] = {}      # estatísticas por coluna
-
-        # logger
-        if logger:
-            self.logger = logger
-        else:
-            self.logger = logging.getLogger(self.__class__.__name__)
-            if not self.logger.handlers:
-                logging.basicConfig(level=logging.INFO,
-                                    format="%(levelname)s: %(message)s")
 
     # ------------------------------------------------------------------
     # MÉTODO INTERNO PARA ESTRATÉGIA AUTO
@@ -170,7 +168,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
             self.report_[col]  = stats
 
             # --- log -------------------------------------------------
-            self.logger.info(
+            self._logger.info(
                 "Coluna '%s' → %s (p=%.3f, skew=%.2f, kurt=%.1f) | motivo: %s",
                 col, stats.get('scaler'),
                 stats.get('p_value', np.nan),
@@ -181,7 +179,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
 
         # serialização opcional
         if self.serialize:
-            self.save(self.save_path)
+            self.save(self._save_path)
 
         return self
 
@@ -240,7 +238,10 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
 
         for feature in features:
             if feature not in self.scalers_:
-                self.logger.warning("Variável '%s' não foi tratada no fit. Pulando...", feature)
+                self._logger.warning(
+                    "Variável '%s' não foi tratada no fit. Pulando...",
+                    feature,
+                )
                 continue
 
             scaler_nome = self.report_.get(feature, {}).get("scaler", "Desconhecido")
@@ -268,14 +269,14 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     # ------------------------------------------------------------------
     def save(self, path: str | pathlib.Path | None = None):
         """Serializa scalers + relatório + metadados."""
-        path = pathlib.Path(path or self.save_path)
+        path = pathlib.Path(path or self._save_path)
         joblib.dump({
             'scalers': self.scalers_,
             'report':  self.report_,
             'strategy': self.strategy,
             'random_state': self.random_state
         }, path)
-        self.logger.info("Scalers salvos em %s", path)
+        self._logger.info("Scalers salvos em %s", path)
 
     def load(self, path: str | pathlib.Path):
         """Restaura scalers + relatório + metadados já treinados."""
@@ -284,5 +285,5 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         self.report_   = data.get('report', {})
         self.strategy  = data.get('strategy', self.strategy)
         self.random_state = data.get('random_state', self.random_state)
-        self.logger.info("Scalers carregados de %s", path)
+        self._logger.info("Scalers carregados de %s", path)
         return self
