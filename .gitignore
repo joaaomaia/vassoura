@@ -67,3 +67,4 @@ run_tests.sh
 
 # Ignore notebook de saída se necessário
 examples/*.out.ipynb
+notes.txt
