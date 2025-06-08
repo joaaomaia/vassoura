@@ -211,9 +211,11 @@ def importance(
 
         X["__shadow__"] = rng.random(len(X))
 
-        # simple encoding for categoricals
-        for col in X.select_dtypes(include=["object", "category"]).columns:
-            X[col] = pd.Categorical(X[col]).codes
+        # WOE encoding for categoricals
+        cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
+        if cat_cols:
+            from .utils import woe_encode
+            X = woe_encode(X, y, cols=cat_cols)
         X = X.fillna(0)
 
         fit_params = {}
