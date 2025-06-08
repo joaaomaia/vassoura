@@ -103,58 +103,114 @@ def importance(
     df: pd.DataFrame,
     target_col: str,
     *,
+    sample_weight: pd.Series | None = None,
     n_estimators: int = 100,
     learning_rate: float = 0.1,
     subsample: float = 0.8,
-    keep_cols: List[str] | None = None,
+    keep_cols: list[str] | None = None,
     drop_lowest: float | int = 0.2,
     random_state: int = 42,
-) -> Dict[str, Any]:
-    """Treina XGBoost (ou LightGBM se instalado) rápido e remove features
-    de baixa importância.
+) -> dict[str, any]:
+    """
+    Treina XGBoost rápido, remove features de baixa importância (shap_gain)
+    e trata automaticamente colunas não numéricas com WOE encoding no fallback.
 
-    *Se* `drop_lowest` < 1 → tratado como quantil (ex.: 0.2 → dropar 20%);
-    caso contrário, remover as `drop_lowest` piores variáveis.
+    - Detecta colunas object e PeriodDtype → converte para category.
+    - Se XGBClassifier aceitar `enable_categorical`, usa.
+    - Caso contrário, tenta usar WOEEncoder para cat_cols; se não disponível,
+      faz one-hot encoding.
+    - Mantém sample_weight automático via compute_sample_weight (balanced).
     """
     try:
         from xgboost import XGBClassifier
         import shap
-    except ImportError:  # pragma: no cover
-        warnings.warn("importance heuristic skipped – xgboost/shap not installed")
+    except ImportError:
+        warnings.warn("importance skipped – xgboost/shap not installed")
         return {"removed": [], "artefacts": None, "meta": {}}
 
+    try:
+        from sklearn.utils.class_weight import compute_sample_weight
+    except ImportError:
+        compute_sample_weight = None
+        warnings.warn("scikit-learn missing – sample_weight automático não disponível")
+
+    # tenta importar WOEEncoder
+    try:
+        from category_encoders.woe import WOEEncoder
+    except ImportError:
+        WOEEncoder = None
+        warnings.warn(
+            "category_encoders not installed – fallback para one-hot encoding em categoricals"
+        )
+
     keep_cols = set(keep_cols or [])
-    X = df.drop(columns=[target_col])
+    X = df.drop(columns=[target_col]).copy()
     y = df[target_col]
 
-    model = XGBClassifier(
+    # 1) Sample weights automáticos
+    if sample_weight is None and compute_sample_weight is not None:
+        try:
+            sample_weight = compute_sample_weight("balanced", y)
+        except Exception as e:
+            warnings.warn(f"Não foi possível calcular sample_weight: {e}")
+            sample_weight = None
+
+    # 2) Detecta colunas object ou PeriodDtype
+    cat_cols = [
+        col for col in X.columns
+        if X[col].dtype == object or is_period_dtype(X[col].dtype)
+    ]
+    if cat_cols:
+        for c in cat_cols:
+            X[c] = X[c].astype("category")
+
+    # 3) Configura XGBClassifier com fallback para WOE / one-hot
+    xgb_kwargs = dict(
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         subsample=subsample,
         eval_metric="logloss",
         random_state=random_state,
-        use_label_encoder=False,
         n_jobs=-1,
     )
-    model.fit(X, y)
+    try:
+        # usa categoricals nativos, se disponível
+        model = XGBClassifier(**xgb_kwargs, enable_categorical=True)
+    except TypeError:
+        # fallback: WOEEncoder ou one-hot
+        if cat_cols:
+            if WOEEncoder is not None:
+                encoder = WOEEncoder(cols=cat_cols)
+                X = encoder.fit_transform(X, y)
+            else:
+                X = pd.get_dummies(X, columns=cat_cols, drop_first=True)
+        model = XGBClassifier(**xgb_kwargs)
 
+    # 4) Treina e calcula SHAP gain
+    model.fit(X, y, sample_weight=sample_weight)
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X)
     gain = pd.Series(shap_values.std(axis=0), index=X.columns, name="shap_gain")
 
+    # 5) Seleção de features a remover
     if drop_lowest < 1:
         cutoff = gain.quantile(drop_lowest)
         removed = gain[gain <= cutoff].index.tolist()
     else:
         removed = gain.sort_values().head(int(drop_lowest)).index.tolist()
-
     removed = [c for c in removed if c not in keep_cols]
 
     return {
         "removed": removed,
         "artefacts": gain,
-        "meta": {"drop_lowest": drop_lowest},
+        "meta": {
+            "drop_lowest": drop_lowest,
+            "n_removed": len(removed),
+            "n_features": X.shape[1],
+            "sample_weight_used": sample_weight is not None,
+        },
     }
+
 
 
 # --------------------------------------------------------------------- #
