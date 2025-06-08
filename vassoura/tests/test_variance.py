@@ -5,7 +5,7 @@ from vassoura.core import Vassoura
 
 def test_variance_removes_constant():
     df = pd.DataFrame({"const": 1, "x": np.random.normal(size=100)})
-    vs = Vassoura(df, heuristics=["variance"], params={"variance": 1e-4})
+    vs = Vassoura(df, process=["variance"], heuristics=[], params={"variance": 1e-4})
     out = vs.run()
     assert "const" not in out.columns
     assert any("variance" in h["reason"] for h in vs.history)
@@ -13,7 +13,7 @@ def test_variance_removes_constant():
 
 def test_variance_keeps_variable():
     df = pd.DataFrame({"x": np.random.normal(size=100)})
-    vs = Vassoura(df, heuristics=["variance"], params={"variance": 1e-4})
+    vs = Vassoura(df, process=["variance"], heuristics=[], params={"variance": 1e-4})
     out = vs.run()
     assert "x" in out.columns
 
@@ -23,7 +23,8 @@ def test_dominant_category_removed():
     df = pd.DataFrame({"cat": cat, "x": np.random.normal(size=100)})
     vs = Vassoura(
         df,
-        heuristics=["variance"],
+        process=["variance"],
+        heuristics=[],
         params={"variance": 1e-4, "variance_dom": 0.95},
     )
     out = vs.run()
@@ -34,7 +35,8 @@ def test_keep_cols_protected():
     df = pd.DataFrame({"const": 1, "x": np.random.normal(size=50)})
     vs = Vassoura(
         df,
-        heuristics=["variance"],
+        process=["variance"],
+        heuristics=[],
         params={"variance": 1e-4},
         keep_cols=["const"],
     )

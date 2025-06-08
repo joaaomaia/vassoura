@@ -157,7 +157,15 @@ def _compute_iv(
 # Main class                                                            #
 # --------------------------------------------------------------------- #
 
-DEFAULT_HEURISTICS = ["corr", "vif"]
+DEFAULT_PROCESS = ["missing", "variance", "scaler"]
+DEFAULT_HEURISTICS = [
+    "iv",
+    "graph_cut",
+    "corr",
+    "vif",
+    "importance",
+    "ks_separation",
+]
 
 
 class Vassoura:
@@ -216,6 +224,7 @@ class Vassoura:
         *,
         target_col: str | None = None,
         keep_cols: Optional[List[str]] = None,
+        process: Optional[List[str]] = None,
         heuristics: Optional[List[str]] = None,
         params: Optional[Dict[str, Any]] = None,
         sample_weight: Optional[pd.Series] = None,
@@ -256,6 +265,7 @@ class Vassoura:
         self.n_steps = n_steps
         self.vif_n_steps = vif_n_steps
 
+        self.process = process if process is not None else DEFAULT_PROCESS.copy()
         self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
         # Valores padrão, podem ser sobrescritos
         self.params = {
@@ -291,17 +301,22 @@ class Vassoura:
         self._drift_leak_df: Optional[pd.DataFrame] = None
         self._importance_df: Optional[pd.DataFrame] = None
         self._importance_meta: Optional[Dict[str, Any]] = None
+        self._scaler = None
+        self._scaled_cols: List[str] = []
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
 
-        # Map heurísticas → métodos
-        self._heuristic_funcs: Dict[str, Callable[[], None]] = {
+        # Map processos e heurísticas → métodos
+        self._process_funcs: Dict[str, Callable[[], None]] = {
             "missing": self._apply_missing,
+            "variance": self._apply_variance,
+            "scaler": self._apply_scaler,
+        }
+        self._heuristic_funcs: Dict[str, Callable[[], None]] = {
             "corr": self._apply_corr,
             "vif": self._apply_vif,
             "iv": self._apply_iv,
             "importance": self._apply_importance,
             "graph_cut": self._apply_graph_cut,
-            "variance": self._apply_variance,
             "psi_stability": self._apply_psi_stability,
             "ks_separation": self._apply_ks_separation,
             "perm_importance": self._apply_perm_importance_lgbm,
@@ -323,13 +338,18 @@ class Vassoura:
             self.df_current.drop(
                 columns=list(self.ignore_cols), errors="ignore", inplace=True
             )
-        if self.params.get("missing") is not None:
-            self._apply_missing()
+        for p in self.process:
+            func = self._process_funcs.get(p)
+            if func is None:
+                raise ValueError(f"Process '{p}' not recognized.")
+            func()
         for h in self.heuristics:
             func = self._heuristic_funcs.get(h)
             if func is None:
                 raise ValueError(f"Heuristic '{h}' not recognized.")
             func()
+        if getattr(self, "_scaler", None) is not None:
+            self._reverse_scaler()
         # Armazena correlação e VIF finais para relatórios
         df_analysis = self._df_for_analysis()
         self._corr_matrix_final = compute_corr_matrix(
@@ -518,6 +538,8 @@ class Vassoura:
         self._drift_leak_df = None
         self._importance_df = None
         self._importance_meta = None
+        self._scaler = None
+        self._scaled_cols = []
         self._history.clear()
 
     # ------------------------------------------------------------------ #
@@ -712,6 +734,35 @@ class Vassoura:
             self._drop(removed, reason=reason)
         else:
             self._history.append({"cols": [], "reason": reason})
+
+    def _apply_scaler(self) -> None:
+        params = self.params.get("scaler", {})
+        if self.verbose:
+            print("[Vassoura] Scaler process")
+        from .scaler import DynamicScaler
+        df_work = self._df_for_analysis()
+        num_cols = df_work.select_dtypes(include=[np.number]).columns.tolist()
+        if self.target_col in num_cols:
+            num_cols.remove(self.target_col)
+        num_cols = [c for c in num_cols if c not in self.keep_cols]
+        if not num_cols:
+            return
+        self._scaled_cols = num_cols
+        self._scaler = DynamicScaler(**params)
+        self._scaler.fit(df_work[num_cols])
+        scaled = self._scaler.transform(df_work[num_cols], return_df=True)
+        self.df_current[num_cols] = scaled[num_cols]
+
+    def _reverse_scaler(self) -> None:
+        cols = [c for c in getattr(self, "_scaled_cols", []) if c in self.df_current.columns]
+        if not cols or not hasattr(self, "_scaler"):
+            return
+        inv_df = self.df_current.copy()
+        for col in cols:
+            scaler = self._scaler.scalers_.get(col)
+            if scaler is not None:
+                inv_df[col] = scaler.inverse_transform(self.df_current[[col]])
+        self.df_current[cols] = inv_df[cols]
 
     def _apply_graph_cut(self) -> None:
         """

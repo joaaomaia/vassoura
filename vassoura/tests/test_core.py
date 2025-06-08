@@ -154,6 +154,7 @@ def test_iv_skipped_when_target_not_binary(capsys):
     vsess = vs.Vassoura(
         df,
         target_col="id",
+        process=[],
         heuristics=["iv"],
         verbose=True,
     )
