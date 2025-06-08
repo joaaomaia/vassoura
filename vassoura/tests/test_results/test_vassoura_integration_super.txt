@@ -8,4 +8,4 @@ collecting ... collected 1 item
 
 vassoura/tests/test_vassoura_integration_super.py::test_vassoura_pipeline_completo PASSED [100%]
 
-============================== 1 passed in 6.46s ==============================
+============================== 1 passed in 6.78s ==============================

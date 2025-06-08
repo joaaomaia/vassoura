@@ -183,9 +183,12 @@ class BorutaMultiShap:
 
                 estimator.fit(Xi, yi, **fit_params)
 
+                from shap.maskers import Independent
+
                 # SHAP values
                 if name == "lr":
-                    expl = shap.LinearExplainer(estimator, Xi, feature_perturbation="interventional")
+                    masker = Independent(Xi)
+                    expl = shap.LinearExplainer(estimator, masker=masker)
                     sv = expl.shap_values(Xi)
                     if isinstance(sv, list):
                         sv = np.stack(sv).sum(axis=0)
@@ -194,6 +197,7 @@ class BorutaMultiShap:
                     sv = expl.shap_values(Xi)
                     if isinstance(sv, list):
                         sv = np.stack(sv).sum(axis=0)
+
 
                 mean_abs = np.abs(sv).mean(axis=0)
                 shap_series = pd.Series(mean_abs, index=Xi.columns)

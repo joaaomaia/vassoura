@@ -10,4 +10,4 @@ vassoura/tests/test_limpeza.py::test_clean_removes_correlated_variable PASSED [ 
 vassoura/tests/test_limpeza.py::test_clean_keeps_unrelated_variable PASSED [ 66%]
 vassoura/tests/test_limpeza.py::test_clean_handles_negative_correlation PASSED [100%]
 
-============================== 3 passed in 2.24s ==============================
+============================== 3 passed in 2.28s ==============================

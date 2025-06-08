@@ -432,11 +432,11 @@ def generate_report(
         if "__noise_uniform__" not in df_clean.columns:
             np.random.seed(0)
             df_clean["__noise_uniform__"] = np.random.rand(len(df_clean))
-        if "__shadow__" not in df_clean.columns:
-            df_clean["__shadow__"] = df_clean["__noise_uniform__"]
-        if "__shadow__" not in df_clean.columns:
+        if "__noise_uniform__" not in df_clean.columns:
+            df_clean["__noise_uniform__"] = df_clean["__noise_uniform__"]
+        if "__noise_uniform__" not in df_clean.columns:
             np.random.seed(1)
-            df_clean["__shadow__"] = np.random.rand(len(df_clean))
+            df_clean["__noise_uniform__"] = np.random.rand(len(df_clean))
 
         def _compute_ks(s: pd.Series, target: pd.Series, n_bins: int = 10) -> float:
             if s.dtype.kind in "bifc" and s.nunique() > 1:
@@ -464,7 +464,7 @@ def generate_report(
         ks_s = ks_s.sort_values(ascending=False)
 
         X = df_clean[cols_eval]
-        if "__noise_uniform__" in X.columns and "__shadow__" in X.columns:
+        if "__noise_uniform__" in X.columns and "__noise_uniform__" in X.columns:
             X = X.drop(columns=["__noise_uniform__"])
         X = X.apply(lambda s: s.astype("category") if s.dtype == "object" else s)
         model = LGBMClassifier(

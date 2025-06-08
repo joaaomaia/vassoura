@@ -18,4 +18,4 @@ vassoura/tests/test_advanced_heuristics.py::test_drift_vs_target_leakage
     date_ord = pd.to_datetime(df[date_col]).view("int64")
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 5 passed, 1 warning in 3.59s =========================
+======================== 5 passed, 1 warning in 3.39s =========================

@@ -35,42 +35,6 @@ from .vif import compute_vif
 # Helper functions                                                      #
 # --------------------------------------------------------------------- #
 
-
-# def _compute_iv(series: pd.Series, target: pd.Series, *, bins: int = 10) -> float:
-#     """Computes Information Value using quantile binning (numeric) or
-#     category grouping (categorical). Very light implementation – for
-#     production we may migrate to `scorecardpy` or `optbinning`.
-#     """
-#     # Ensure target has exactly two classes
-#     uniques = target.dropna().unique()
-#     if len(uniques) != 2:
-#         warnings.warn("Target must be binary (0/1) for IV calculation.")
-#         return 0.0
-#     # Map valores arbitrários → {0,1}
-#     mapping = {uniques[0]: 0, uniques[1]: 1}
-#     target_num = target.map(mapping)
-
-#     if series.dtype.kind in "bifc":
-#         # Numeric – quantile bins (duplicates handled gracefully)
-#         try:
-#             binned = pd.qcut(series, q=bins, duplicates="drop")
-#         except ValueError:
-#             # Constant series ou valores únicos insuficientes
-#             return 0.0
-#     else:
-#         binned = series.astype("category")
-
-#     tab = pd.crosstab(binned, target_num)
-#     if tab.shape[1] != 2:
-#         warnings.warn("Target must be binary (0/1) for IV calculation.")
-#         return 0.0
-#     tab = tab.rename(columns={0: "good", 1: "bad"}).replace(0, 0.5)  # suavização
-#     dist_good = tab["good"] / tab["good"].sum()
-#     dist_bad = tab["bad"] / tab["bad"].sum()
-#     woe = np.log(dist_good / dist_bad)
-#     iv = ((dist_good - dist_bad) * woe).sum()
-#     return iv
-
 # Logger padrão (o usuário pode sobrescrever o handler/formato fora da lib)
 logger = logging.getLogger(__name__)
 
