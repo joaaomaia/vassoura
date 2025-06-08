@@ -148,6 +148,9 @@ Sugerimos executar `pre‑commit install` para aderir ao nosso *style guide* aut
 
 Este projeto é distribuído sob a licença MIT – veja o arquivo [LICENSE](LICENSE) para detalhes.
 
+> Este projeto também respeita as licenças de todas as bibliotecas utilizadas como dependência.
+> Consulte o arquivo [NOTICE.md](NOTICE.md) para a lista completa de licenças de terceiros.
+
 ---
 
 > Feito com ☕ + 🧹 por contribuidores da comunidade de *data science* brasileira.

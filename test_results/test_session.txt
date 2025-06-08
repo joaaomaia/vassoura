@@ -13,4 +13,4 @@ vassoura/tests/test_session.py::test_manual_removal PASSED               [ 66%]
 vassoura/tests/test_session.py::test_reset PASSED                        [ 83%]
 vassoura/tests/test_session.py::test_fractional_steps_session PASSED     [100%]
 
-============================== 6 passed in 2.16s ==============================
+============================== 6 passed in 2.19s ==============================

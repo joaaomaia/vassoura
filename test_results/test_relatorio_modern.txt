@@ -8,21 +8,4 @@ collecting ... collected 1 item
 
 vassoura/tests/test_relatorio_modern.py::test_generate_report_modern PASSED [100%]
 
-============================== warnings summary ===============================
-vassoura/tests/test_relatorio_modern.py::test_generate_report_modern
-vassoura/tests/test_relatorio_modern.py::test_generate_report_modern
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\relatorio.py:62: FutureWarning: 
-  
-  Passing `palette` without assigning `hue` is deprecated and will be removed in v0.14.0. Assign the `y` variable to `hue` and set `legend=False` for the same effect.
-  
-    sns.barplot(y=vif_s.index, x=vif_s.values, orient="h", palette=pal, ax=ax)
-
-vassoura/tests/test_relatorio_modern.py::test_generate_report_modern
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\relatorio.py:371: FutureWarning: 
-  
-  Passing `palette` without assigning `hue` is deprecated and will be removed in v0.14.0. Assign the `y` variable to `hue` and set `legend=False` for the same effect.
-  
-    sns.barplot(y=ks_s.index, x=ks_s.values, palette=pal, orient="h", ax=ax)
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 1 passed, 3 warnings in 8.95s ========================
+============================== 1 passed in 9.04s ==============================

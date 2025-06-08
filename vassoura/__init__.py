@@ -1,3 +1,5 @@
+__version__ = "0.1.0"
+
 from .utils import (
     search_dtypes,
     suggest_corr_method,
@@ -5,7 +7,7 @@ from .utils import (
     criar_dataset_pd_behavior,
 )
 
-from . import _compat
+from . import _compat  # importa ajustes de compatibilidade (não está no __all__)
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
 from .vif import compute_vif, remove_high_vif
 from .limpeza import clean
