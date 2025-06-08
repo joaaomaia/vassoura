@@ -33,3 +33,6 @@ Build a graph using partial correlations and remove a minimal vertex cover.
 
 ### `drift_vs_target_leakage(df, date_col, target_col, drift_thr=0.3, leak_thr=0.5, keep_cols=None)`
 Detect features highly correlated with both the date column and the target (potential leakage).
+
+### `target_leakage(df, target_col, threshold=0.8, method='spearman', keep_cols=None, id_cols=None, date_cols=None)`
+Highlight columns with very high absolute correlation with the target, indicating possible data leakage.

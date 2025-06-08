@@ -154,6 +154,7 @@ def _compute_iv(
 
 DEFAULT_PROCESS = ["missing", "variance", "scaler"]
 DEFAULT_HEURISTICS = [
+    "target_leakage",
     "iv",
     "graph_cut",
     "corr",
@@ -266,6 +267,7 @@ class Vassoura:
         )
         # Valores padrão, podem ser sobrescritos
         self.params = {
+            "target_leakage": 0.80,
             "corr": 0.9,
             "vif": 10.0,
             "iv": 0.02,
@@ -295,6 +297,8 @@ class Vassoura:
         self._psi_series: Optional[pd.Series] = None
         self._ks_series: Optional[pd.Series] = None
 
+        self._leakage_series: Optional[pd.Series] = None
+
         self._perm_series: Optional[pd.Series] = None
         self._partial_graph: Any = None
         self._drift_leak_df: Optional[pd.DataFrame] = None
@@ -312,6 +316,7 @@ class Vassoura:
             "scaler": self._apply_scaler,
         }
         self._heuristic_funcs: Dict[str, Callable[[], None]] = {
+            "target_leakage": self._apply_target_leakage,
             "corr": self._apply_corr,
             "vif": self._apply_vif,
             "iv": self._apply_iv,
@@ -485,6 +490,7 @@ class Vassoura:
             "vif_after": self._vif_df,
             "psi_series": self._psi_series,
             "ks_series": self._ks_series,
+            "leakage_series": self._leakage_series,
             "perm_series": self._perm_series,
             "partial_graph": self._partial_graph,
             "drift_leak_df": self._drift_leak_df,
@@ -537,6 +543,7 @@ class Vassoura:
         self._variance_series = None
         self._psi_series = None
         self._ks_series = None
+        self._leakage_series = None
         self._perm_series = None
         self._partial_graph = None
         self._drift_leak_df = None
@@ -849,6 +856,25 @@ class Vassoura:
         )
         self._ks_series = result.get("artefacts")
         self._drop(result.get("removed", []), reason=f"ks<{thr}")
+
+    def _apply_target_leakage(self) -> None:
+        if self.target_col is None:
+            warnings.warn("target_leakage skipped: target_col not provided.")
+            return
+        thr = self.params.get("target_leakage", 0.80)
+        from .leakage import target_leakage
+
+        result = target_leakage(
+            self.df_current,
+            target_col=self.target_col,
+            threshold=thr,
+            method="spearman",
+            keep_cols=list(self.keep_cols),
+            id_cols=self.id_cols,
+            date_cols=self.date_cols,
+        )
+        self._leakage_series = result.get("artefacts")
+        self._drop(result.get("removed", []), reason=f"leak_corr>{thr}")
 
     def _apply_perm_importance_lgbm(self) -> None:
         if self.target_col is None:

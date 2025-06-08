@@ -64,6 +64,7 @@ As seguintes heurísticas extras podem ser combinadas livremente no parâmetro `
 * `perm_importance` – ranking rápido via LightGBM e permutação.
 * `partial_corr_cluster` – clusterização por correlação parcial com corte mínimo em grafo.
 * `drift_leak` – identifica vazamentos de informação relacionados à data de referência.
+* `target_leakage` – destaca colunas com alta correlação com o target (possível vazamento).
 
 ---
 
