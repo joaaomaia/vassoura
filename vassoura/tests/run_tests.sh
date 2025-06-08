@@ -14,6 +14,8 @@ pytest -vv --tb=long vassoura/tests/test_session.py                             
 pytest -vv --tb=long vassoura/tests/test_special_cols.py                         > vassoura/tests/test_results/test_special_cols.txt
 pytest -vv --tb=long vassoura/tests/test_utils.py                                > vassoura/tests/test_results/test_utils.txt
 pytest -vv --tb=long vassoura/tests/test_variance.py                             > vassoura/tests/test_results/test_variance.txt
+pytest -vv --tb=long vassoura/tests/test_boruta_multi_shap.py 
+ > vassoura/tests/test_results/test_boruta_multi_shap.txt
 pytest -vv --tb=long vassoura/tests/test_vassoura_integration_super.py           > vassoura/tests/test_results/test_vassoura_integration_super.txt
 pytest -vv --tb=long vassoura/tests/test_vif.py                                  > vassoura/tests/test_results/test_vif.txt
 
