@@ -22,14 +22,14 @@ import numpy as np
 import pandas as pd
 
 from .correlacao import compute_corr_matrix
-from .vif import compute_vif, remove_high_vif
 from .utils import parse_verbose
+from .vif import compute_vif, remove_high_vif
 
 __all__ = [
     "clean",
 ]
 
-LOGGER = logging.getLogger("vassoura")
+LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Funções auxiliares
