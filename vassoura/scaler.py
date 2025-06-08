@@ -236,9 +236,11 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     def transform(self, X, return_df: bool = False):
         X_df = pd.DataFrame(X).copy()
         if not getattr(self, "_fitted", False):
-            raise RuntimeError(
-                "DynamicScaler must be fitted before calling transform()."
+            warnings.warn(
+                "DynamicScaler must be fitted before calling transform(). Returning data unchanged.",
+                UserWarning,
             )
+            return X_df if return_df else X_df.values
         start_time = time.time()
         if self.verbose in ("basic", "debug"):
             self.logger.info("[DynamicScaler] start")
@@ -266,9 +268,11 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     def inverse_transform(self, X, return_df: bool = False):
         X_df = pd.DataFrame(X, columns=self.scalers_.keys()).copy()
         if not getattr(self, "_fitted", False):
-            raise RuntimeError(
-                "DynamicScaler must be fitted before calling transform()."
+            warnings.warn(
+                "DynamicScaler must be fitted before calling inverse_transform(). Returning data unchanged.",
+                UserWarning,
             )
+            return X_df if return_df else X_df.values
         for col, scaler in self.scalers_.items():
             if scaler is not None:
                 X_df[col] = scaler.inverse_transform(X_df[[col]])
