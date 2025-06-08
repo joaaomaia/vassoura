@@ -155,8 +155,12 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
                 scaler = MinMaxScaler()
                 stats  = dict(reason='global-minmax', scaler='MinMaxScaler')
             elif strategy == 'quantile':
-                scaler = QuantileTransformer(output_distribution='normal',
-                                             random_state=self.random_state)
+                if len(X_df) < 1000: 
+                    n_quantiles = min(1000, len(X_df))
+                    scaler = QuantileTransformer(n_quantiles=n_quantiles, output_distribution="uniform") 
+                else:
+                    scaler = QuantileTransformer(output_distribution='normal',
+                                                random_state=self.random_state)
                 stats  = dict(reason='global-quantile', scaler='QuantileTransformer')
             else:              # None
                 scaler = None
