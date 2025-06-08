@@ -304,6 +304,7 @@ class Vassoura:
         self._drift_leak_df: Optional[pd.DataFrame] = None
         self._importance_df: Optional[pd.DataFrame] = None
         self._importance_meta: Optional[Dict[str, Any]] = None
+        self._boruta_result: Optional[Dict[str, Any]] = None
         self._scaler = None
         self._scaled_cols: List[str] = []
         self._df_scaled: Optional[pd.DataFrame] = None
@@ -327,6 +328,7 @@ class Vassoura:
             "perm_importance": self._apply_perm_importance_lgbm,
             "partial_corr_cluster": self._apply_partial_corr_cluster,
             "drift_leak": self._apply_drift_vs_target_leakage,
+            "boruta_multi_shap": self._apply_boruta_multi_shap,
         }
 
     # ------------------------------------------------------------------ #
@@ -496,6 +498,7 @@ class Vassoura:
             "drift_leak_df": self._drift_leak_df,
             "importance_df": self._importance_df,
             "importance_meta": self._importance_meta,
+            "boruta_result": self._boruta_result,
             "dropped_cols": self.dropped,
             "id_cols": self.id_cols,
             "date_cols": self.date_cols,
@@ -549,6 +552,7 @@ class Vassoura:
         self._drift_leak_df = None
         self._importance_df = None
         self._importance_meta = None
+        self._boruta_result = None
         self._scaler = None
         self._scaled_cols = []
         self._df_scaled = None
@@ -922,6 +926,32 @@ class Vassoura:
             result.get("removed", []),
             reason=f"drift>{drift_thr}&leak>{leak_thr}",
         )
+
+    def _apply_boruta_multi_shap(self) -> None:
+        if self.target_col is None:
+            warnings.warn("boruta_multi_shap skipped: target_col not provided.")
+            return
+
+        params = self.params.get("boruta_multi_shap", {})
+        from .heuristics import boruta_multi_shap
+
+        if self.verbose:
+            print("[Vassoura] Boruta Multi SHAP heuristic")
+
+        df_work = self._df_for_analysis()
+        result = boruta_multi_shap(
+            df_work,
+            self.target_col,
+            logger=logger if self.verbose else None,
+            **params,
+        )
+
+        self._boruta_result = result
+        removed = [c for c in result.get("removed", []) if c in self.df_current.columns]
+        if removed:
+            self._drop(removed, reason="boruta_multi_shap")
+        else:
+            self._history.append({"cols": [], "reason": "boruta_multi_shap"})
 
     # ------------------------------------------------------------------ #
     # Helpers                                                            #
