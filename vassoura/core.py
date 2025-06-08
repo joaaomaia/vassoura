@@ -266,7 +266,7 @@ class Vassoura:
         self.vif_n_steps = vif_n_steps
 
         self.process = process if process is not None else DEFAULT_PROCESS.copy()
-        self.heuristics = heuristics or DEFAULT_HEURISTICS.copy()
+        self.heuristics = DEFAULT_HEURISTICS.copy() if heuristics is None else heuristics
         # Valores padrão, podem ser sobrescritos
         self.params = {
             "corr": 0.9,
@@ -306,6 +306,7 @@ class Vassoura:
         self._importance_meta: Optional[Dict[str, Any]] = None
         self._scaler = None
         self._scaled_cols: List[str] = []
+        self._df_scaled: Optional[pd.DataFrame] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
 
         # Map processos e heurísticas → métodos
@@ -341,6 +342,8 @@ class Vassoura:
             self.df_current.drop(
                 columns=list(self.ignore_cols), errors="ignore", inplace=True
             )
+        if self.heuristics and "scaler" not in self.process:
+            raise ValueError("scaler must precede heuristics")
         for p in self.process:
             func = self._process_funcs.get(p)
             if func is None:
@@ -351,8 +354,10 @@ class Vassoura:
             if func is None:
                 raise ValueError(f"Heuristic '{h}' not recognized.")
             func()
+
+        cols_keep = list(self.df_current.columns)
         if getattr(self, "_scaler", None) is not None:
-            self._reverse_scaler()
+            self.df_current = self.df_original[cols_keep].copy()
         # Armazena correlação e VIF finais para relatórios
         df_analysis = self._df_for_analysis()
         self._corr_matrix_final = compute_corr_matrix(
@@ -543,6 +548,7 @@ class Vassoura:
         self._importance_meta = None
         self._scaler = None
         self._scaled_cols = []
+        self._df_scaled = None
         self._history.clear()
 
     # ------------------------------------------------------------------ #
@@ -740,6 +746,8 @@ class Vassoura:
 
     def _apply_scaler(self) -> None:
         params = self.params.get("scaler", {})
+        if "verbose" not in params:
+            params["verbose"] = self.verbose
         if self.verbose:
             print("[Vassoura] Scaler process")
         from .scaler import DynamicScaler
@@ -755,6 +763,7 @@ class Vassoura:
         self._scaler.fit(df_work[num_cols])
         scaled = self._scaler.transform(df_work[num_cols], return_df=True)
         self.df_current[num_cols] = scaled[num_cols]
+        self._df_scaled = self.df_current.copy()
 
     def _reverse_scaler(self) -> None:
         cols = [c for c in getattr(self, "_scaled_cols", []) if c in self.df_current.columns]
