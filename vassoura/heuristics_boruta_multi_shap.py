@@ -104,7 +104,7 @@ class BorutaMultiShap:
 
                 if problem == "binary":
                     models_cfg.append(
-                        {"name": "lr", "estimator": LogisticRegression(max_iter=200)}
+                        {"name": "lr", "estimator": LogisticRegression(max_iter=200, penalty='l2',random_state=42)}
                     )
             except Exception:
                 warnings.warn("LogisticRegression unavailable")
