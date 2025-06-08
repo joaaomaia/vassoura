@@ -248,6 +248,7 @@ def generate_report(
         vif_after = precomputed.get("vif_after")
         psi_series = precomputed.get("psi_series")
         ks_series = precomputed.get("ks_series")
+        leakage_series = precomputed.get("leakage_series")
         perm_series = precomputed.get("perm_series")
         partial_graph = precomputed.get("partial_graph")
         drift_leak_df = precomputed.get("drift_leak_df")
@@ -264,6 +265,7 @@ def generate_report(
         vif_after = None
         psi_series = None
         ks_series = None
+        leakage_series = None
         perm_series = None
         partial_graph = None
         drift_leak_df = None
@@ -638,6 +640,25 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             html += "<div><i>nenhuma coluna detectada</i></div>\n"
         html += "</div></div>\n"
 
+        if leakage_series is not None:
+            html += '<div class="section" id="leakage">'
+            html += "<h2>Target Leakage Screening</h2>"
+            if leakage_series.empty:
+                html += "<p><i>Nenhum vazamento potencial detectado.</i></p>"
+            else:
+                html += (
+                    "<p>As features abaixo apresentam alta associação com o target e devem ser revisadas para garantir que estão disponíveis no momento da predição e que não representam informação futura.</p>"
+                )
+                html += "<div class=\"feature-grid\">"
+                for col, val in leakage_series.items():
+                    tipo = (
+                        "num" if col in num_cols else "cat" if col in cat_cols else "unk"
+                    )
+                    badge = f" <span class='badge {tipo}'>{tipo}</span>" if tipo != "unk" else ""
+                    html += f"<div title='{val:.3f}'>{col}{badge}</div>"
+                html += "</div>"
+            html += "</div>\n"
+
         # Justificativa do método de correlação
         html += textwrap.dedent(
             f"""
@@ -786,6 +807,9 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             **Numéricas ({len(num_cols)}):** {', '.join(num_cols) or '*nenhuma*'}
 
             **Categóricas ({len(cat_cols)}):** {', '.join(cat_cols) or '*nenhuma*'}
+
+            ## Target Leakage Screening
+            {leakage_series.to_markdown() if leakage_series is not None and not leakage_series.empty else 'Nenhum vazamento potencial detectado.'}
 
             ## 2. Método de Correlação
             {metodo_texto}

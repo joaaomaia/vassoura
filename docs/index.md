@@ -20,4 +20,5 @@ integration with ReadTheDocs.
 - [analisador](analisador.md) – simple recommendation engine for ACF results.
 - [core](core.md) – stateful cleaning session class.
 - [heuristics](heuristics.md) – optional feature‑selection heuristics.
+- [leakage](heuristics.md) – target leakage detection helper.
 

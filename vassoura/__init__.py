@@ -15,6 +15,7 @@ from .utils import (
     suggest_corr_method,
 )
 from .vif import compute_vif, remove_high_vif
+from .leakage import target_leakage
 
 __all__ = [
     "search_dtypes",
@@ -25,6 +26,7 @@ __all__ = [
     "plot_corr_heatmap",
     "compute_vif",
     "remove_high_vif",
+    "target_leakage",
     "clean",
     "generate_report",
     "compute_panel_acf",
