@@ -55,7 +55,7 @@ __all__ = [
     "plot_corr_heatmap",
 ]
 
-LOGGER = logging.getLogger("vassoura")
+LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers internos

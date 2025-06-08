@@ -29,7 +29,7 @@ __all__ = [
     "remove_high_vif",
 ]
 
-LOGGER = logging.getLogger("vassoura")
+LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Funções internas auxiliares

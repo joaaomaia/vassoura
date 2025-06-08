@@ -18,13 +18,13 @@ Funções públicas
 import logging
 from typing import Dict, List, Literal, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from statsmodels.tsa.stattools import acf
-import matplotlib.pyplot as plt
 
-LOGGER = logging.getLogger("vassoura")
+LOGGER = logging.getLogger(__name__)
 
 __all__ = ["compute_panel_acf", "plot_panel_acf"]
 
