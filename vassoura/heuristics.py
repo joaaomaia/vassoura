@@ -18,6 +18,9 @@ A sessão garantirá cacheamento.
 from __future__ import annotations
 
 from typing import Any, Dict, List
+import logging
+
+from .scaler import DynamicScaler
 
 import os
 import warnings
@@ -45,6 +48,8 @@ warnings.filterwarnings(
     "ignore",
     message="LightGBM binary classifier with TreeExplainer shap values output has changed",
 )
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------- #
@@ -106,21 +111,30 @@ def importance(
     target_col: str,
     *,
     params: dict[str, Any] | None = None,
+    scaler_args: dict[str, Any] | None = None,
     sample_weight: pd.Series | None = None,
+    woe_cols: list[str] | None = None,
     keep_cols: list[str] | None = None,
 ) -> Dict[str, Any]:
     """Calcula importâncias de features comparadas a uma shadow feature."""
 
     from sklearn.utils.class_weight import compute_sample_weight
     from sklearn.base import clone
+    from sklearn.pipeline import Pipeline
+    from sklearn.exceptions import ConvergenceWarning
     import inspect
 
     params = params or {}
+    scaler_args = scaler_args or {}
     keep_cols = set(keep_cols or [])
 
-    sample_frac = params.get("sample_frac", 0.7)
-    random_state = params.get("random_state", 42)
-    models_cfg = params.get("models")
+    # global settings
+    sample_frac = params.pop("sample_frac", 0.7)
+    random_state = params.pop("random_state", 42)
+    models_cfg = params.pop("models", None)
+
+    lr_params = params
+    lr_params.setdefault("max_iter", 500)
 
     rng = np.random.default_rng(random_state)
 
@@ -134,6 +148,20 @@ def importance(
             sample_weight = None
 
     default_models: List[Dict[str, Any]] = []
+
+    try:
+        from sklearn.linear_model import LogisticRegression
+
+        if y_full.nunique() == 2:
+            lr_est = Pipeline(
+                [
+                    ("scaler", DynamicScaler(**scaler_args)),
+                    ("lr", LogisticRegression(**lr_params)),
+                ]
+            )
+            default_models.append({"name": "lr", "estimator": lr_est})
+    except Exception:  # pragma: no cover
+        warnings.warn("LogisticRegression indisponível")
 
     try:
         from xgboost import XGBClassifier, XGBRegressor
@@ -179,24 +207,35 @@ def importance(
     except Exception:  # pragma: no cover - optional
         warnings.warn("LightGBM não disponível para importance")
 
-    try:
-        from sklearn.linear_model import LogisticRegression
-
-        if y_full.nunique() == 2:
-            default_models.append(
-                {
-                    "name": "lr",
-                    "estimator": LogisticRegression(max_iter=200),
-                }
-            )
-    except Exception:  # pragma: no cover
-        warnings.warn("LogisticRegression indisponível")
-
     models_cfg = models_cfg or default_models
+
+    # ------------------------------------------------------------------
+    # Pré-processamento único para todos os modelos
+    # ------------------------------------------------------------------
+    idx = rng.choice(len(df), size=int(len(df) * sample_frac), replace=False)
+    X = X_full.iloc[idx].copy()
+    y = y_full.iloc[idx]
+    sw = sample_weight[idx] if sample_weight is not None else None
+
+    X["__shadow__"] = rng.random(len(X))
+
+    cat_cols = (
+        woe_cols or X.select_dtypes(include=["object", "category"]).columns.tolist()
+    )
+    if cat_cols:
+        from .utils import woe_encode
+
+        X = woe_encode(X, y, cols=cat_cols)
+    X = X.fillna(0)
+
+    scaler = DynamicScaler(**scaler_args)
+    scaler.fit(X)
+    X_scaled = pd.DataFrame(scaler.transform(X), columns=X.columns)
 
     importances: Dict[str, pd.Series] = {}
     shadow_values: Dict[str, float] = {}
     models_without_weights: List[str] = []
+    conv_info: Dict[str, bool] = {}
 
     for cfg in models_cfg:
         name = cfg.get("name", str(len(importances)))
@@ -204,19 +243,10 @@ def importance(
         if cfg.get("hyperparams"):
             estimator.set_params(**cfg["hyperparams"])
 
-        idx = rng.choice(len(df), size=int(len(df) * sample_frac), replace=False)
-        X = X_full.iloc[idx].copy()
-        y = y_full.iloc[idx]
-        sw = sample_weight[idx] if sample_weight is not None else None
-
-        X["__shadow__"] = rng.random(len(X))
-
-        # WOE encoding for categoricals
-        cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
-        if cat_cols:
-            from .utils import woe_encode
-            X = woe_encode(X, y, cols=cat_cols)
-        X = X.fillna(0)
+        if isinstance(estimator, Pipeline):
+            X_model = X
+        else:
+            X_model = X_scaled.copy()
 
         fit_params = {}
         sig = inspect.signature(estimator.fit)
@@ -232,27 +262,54 @@ def importance(
             if sw is not None:
                 models_without_weights.append(name)
 
+        converged = True
         try:
-            estimator.fit(X, y, **fit_params)
+            with warnings.catch_warnings(record=True) as warn:
+                warnings.simplefilter("always", ConvergenceWarning)
+                estimator.fit(X_model, y, **fit_params)
+                conv_warn = any(isinstance(w.message, ConvergenceWarning) for w in warn)
+            if (
+                conv_warn
+                and hasattr(estimator, "set_params")
+                and "max_iter" in estimator.get_params()
+            ):
+                logger.info(
+                    "%s atingiu limite de iterações; tentando novamente com max_iter duplicado",
+                    name,
+                )
+                new_iter = estimator.get_params()["max_iter"] * 2
+                estimator.set_params(max_iter=new_iter)
+                with warnings.catch_warnings(record=True) as warn2:
+                    warnings.simplefilter("always", ConvergenceWarning)
+                    estimator.fit(X_model, y, **fit_params)
+                    converged = not any(
+                        isinstance(w.message, ConvergenceWarning) for w in warn2
+                    )
+            else:
+                converged = not conv_warn
         except Exception:
-            estimator.fit(X, y)
+            estimator.fit(X_model, y)
+            converged = False
             if sw is not None and name not in models_without_weights:
                 models_without_weights.append(name)
 
-        if hasattr(estimator, "feature_importances_"):
-            imp = pd.Series(estimator.feature_importances_, index=X.columns)
-        elif hasattr(estimator, "coef_"):
-            coef = estimator.coef_[0] if estimator.coef_.ndim > 1 else estimator.coef_
-            imp = pd.Series(np.abs(coef), index=X.columns)
+        est_final = (
+            estimator.steps[-1][1] if isinstance(estimator, Pipeline) else estimator
+        )
+        if hasattr(est_final, "feature_importances_"):
+            imp = pd.Series(est_final.feature_importances_, index=X_model.columns)
+        elif hasattr(est_final, "coef_"):
+            coef = est_final.coef_[0] if est_final.coef_.ndim > 1 else est_final.coef_
+            imp = pd.Series(np.abs(coef), index=X_model.columns)
         else:  # pragma: no cover - fallback
             try:
                 import shap
 
-                expl = shap.TreeExplainer(estimator)
-                sv = expl.shap_values(X)
+                expl = shap.TreeExplainer(est_final)
+                sv = expl.shap_values(X_model)
                 if isinstance(sv, list):
                     sv = sv[0]
-                imp = pd.Series(np.abs(sv).mean(axis=0), index=X.columns)
+                imp = pd.Series(np.abs(sv).mean(axis=0), index=X_model.columns)
             except Exception:
                 continue
 
@@ -261,6 +318,9 @@ def importance(
             imp = imp.drop("__shadow__")
         shadow_values[name] = shadow_val
         importances[name] = imp
+        conv_info[f"{name}_converged"] = converged
+        if not converged:
+            logger.info("Modelo %s n\u00e3o convergiu", name)
 
     if not importances:
         return {
@@ -294,6 +354,7 @@ def importance(
         "random_state": random_state,
         "sample_weight_provided": sample_weight is not None,
         "models_without_weights": models_without_weights,
+        **conv_info,
     }
 
     return {
