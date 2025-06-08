@@ -10,4 +10,4 @@ vassoura/tests/test_leakage.py::test_detect_exact_copy PASSED            [ 33%]
 vassoura/tests/test_leakage.py::test_detect_partial_copy PASSED          [ 66%]
 vassoura/tests/test_leakage.py::test_extreme_cases_not_flagged PASSED    [100%]
 
-============================== 3 passed in 2.21s ==============================
+============================== 3 passed in 2.17s ==============================

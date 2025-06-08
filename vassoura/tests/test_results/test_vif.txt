@@ -9,4 +9,4 @@ collecting ... collected 2 items
 vassoura/tests/test_vif.py::test_vif_shape_and_variables PASSED          [ 50%]
 vassoura/tests/test_vif.py::test_vif_values_reasonable PASSED            [100%]
 
-============================== 2 passed in 2.19s ==============================
+============================== 2 passed in 2.35s ==============================

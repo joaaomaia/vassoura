@@ -11,4 +11,4 @@ vassoura/tests/test_variance.py::test_variance_keeps_variable PASSED     [ 50%]
 vassoura/tests/test_variance.py::test_dominant_category_removed PASSED   [ 75%]
 vassoura/tests/test_variance.py::test_keep_cols_protected PASSED         [100%]
 
-============================== 4 passed in 2.23s ==============================
+============================== 4 passed in 2.18s ==============================

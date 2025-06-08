@@ -11,4 +11,4 @@ vassoura/tests/test_autocorr.py::test_analisar_autocorrelacao_levels PASSED [ 50
 vassoura/tests/test_autocorr.py::test_plot_panel_acf PASSED              [ 75%]
 vassoura/tests/test_autocorr.py::test_make_period_index_invalid PASSED   [100%]
 
-============================== 4 passed in 2.44s ==============================
+============================== 4 passed in 2.41s ==============================
