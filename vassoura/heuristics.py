@@ -27,6 +27,7 @@ import warnings
 
 import pandas as pd
 import numpy as np
+from .heuristics_boruta_multi_shap import BorutaMultiShap
 
 # Dependências opcionais (import inside functions)
 
@@ -40,6 +41,7 @@ __all__ = [
     "perm_importance_lgbm",
     "partial_corr_cluster",
     "drift_vs_target_leakage",
+    "boruta_multi_shap",
 ]
 
 os.environ.setdefault("LIGHTGBM_DISABLE_STDERR_REDIRECT", "1")
@@ -791,3 +793,32 @@ def drift_vs_target_leakage(
         "artefacts": artefacts,
         "meta": {"drift_thr": drift_thr, "leak_thr": leak_thr},
     }
+
+
+# --------------------------------------------------------------------- #
+# Boruta Multi SHAP                                                      #
+# --------------------------------------------------------------------- #
+
+
+def boruta_multi_shap(
+    df: pd.DataFrame,
+    target_col: str,
+    *,
+    n_iter: int = 50,
+    sample_frac: float = 0.7,
+    approval_ratio: float = 0.9,
+    random_state: int | None = None,
+    models: list[dict[str, object]] | None = None,
+    problem: str = "auto",
+    logger: logging.Logger | None = None,
+) -> Dict[str, Any]:
+    """Wrapper for :class:`BorutaMultiShap`."""
+
+    selector = BorutaMultiShap(
+        n_iter=n_iter,
+        sample_frac=sample_frac,
+        approval_ratio=approval_ratio,
+        random_state=random_state,
+        models=models,
+    )
+    return selector(df, target_col, problem=problem, logger=logger)
