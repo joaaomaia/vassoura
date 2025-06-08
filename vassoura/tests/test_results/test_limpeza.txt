@@ -4,9 +4,10 @@ cachedir: .pytest_cache
 rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
 configfile: pyproject.toml
 plugins: anyio-4.9.0
-collecting ... collected 0 items
+collecting ... collected 3 items
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\typing.py:1924: KeyboardInterrupt
-(to show a full traceback on KeyboardInterrupt use --full-trace)
-============================ no tests ran in 0.78s ============================
+vassoura/tests/test_limpeza.py::test_clean_removes_correlated_variable PASSED [ 33%]
+vassoura/tests/test_limpeza.py::test_clean_keeps_unrelated_variable PASSED [ 66%]
+vassoura/tests/test_limpeza.py::test_clean_handles_negative_correlation PASSED [100%]
+
+============================== 3 passed in 2.14s ==============================
