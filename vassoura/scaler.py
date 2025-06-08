@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import time
 import pathlib
 import joblib
 import numpy as np
@@ -10,9 +11,19 @@ from scipy import stats
 from scipy.stats import shapiro, skew, kurtosis
 
 from sklearn.base import BaseEstimator, TransformerMixin
+import warnings
 from sklearn.preprocessing import (
-    StandardScaler, RobustScaler, MinMaxScaler, QuantileTransformer
+    StandardScaler,
+    RobustScaler,
+    MinMaxScaler,
+    QuantileTransformer,
 )
+
+logger = logging.getLogger("vassoura.scaler")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 class DynamicScaler(BaseEstimator, TransformerMixin):
     """
@@ -36,7 +47,11 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         Usado no QuantileTransformer e em amostragens internas.
 
     logger : logging.Logger | None
-        Logger customizado; se None, cria logger básico.
+        Logger customizado; se None, usa ``vassoura.scaler``.
+    log_level : int | None
+        Nível de log a ser aplicado ao logger.
+    enable_scaler : bool
+        Se False, ``transform`` devolve o DataFrame inalterado.
     """
 
     # ------------------------------------------------------------------
@@ -48,23 +63,33 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
                  serialize: bool = False,
                  save_path: str | pathlib.Path | None = None,
                  random_state: int = 0,
-                 logger: logging.Logger | None = None):
+                 *,
+                 verbose: str = 'none',
+                 log_level: int | None = None,
+                 logger: logging.Logger | None = None,
+                 enable_scaler: bool = True):
         # store raw parameter for scikit-learn compatibility
         self.strategy = strategy
         self.serialize = serialize
         self.save_path = save_path
         self.shapiro_p_val = shapiro_p_val
         self.random_state = random_state
-        self.logger = logger
+        self.verbose = verbose
+        self.enable_scaler = enable_scaler
+        self.log_level = log_level
+        self.logger = logger or globals()["logger"]
+        if log_level is not None:
+            self.logger.setLevel(log_level)
 
         self._save_path = pathlib.Path(save_path or "scalers.pkl")
-        self._logger = logger or logging.getLogger(self.__class__.__name__)
-        if not self._logger.handlers:
-            logging.basicConfig(level=logging.INFO,
-                                format="%(levelname)s: %(message)s")
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            self.logger.addHandler(handler)
 
         self.scalers_: dict[str, BaseEstimator] = {}
         self.report_:  dict[str, dict] = {}      # estatísticas por coluna
+        self.fitted_ = False
+        self._fitted = False
 
     # ------------------------------------------------------------------
     # MÉTODO INTERNO PARA ESTRATÉGIA AUTO
@@ -96,9 +121,8 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
 
         # ---------------- critérios de NÃO escalonar ----------------
         # (1) variável já em [0,1]
-        if 0.95 <= sample.min() <= sample.max() <= 1.05:
-            return None, dict(p_value=p_val, skew=sk, kurtosis=kt,
-                              reason='já escalada [0-1]', scaler='None')
+        if sample.min() >= 0 and sample.max() <= 1:
+            return None, dict(reason='pre-scaled [0-1]', scaler='None')
 
         # # (2) praticamente normal
         # if abs(sk) < 0.05 and abs(kt) < 0.1 and p_val > 0.90:
@@ -107,8 +131,10 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         
         # (3) praticamente normal (menos restritivo)
         if abs(sk) < 0.5 and abs(kt) < 1.0 and p_val > self.shapiro_p_val:
-            return None, dict(p_value=p_val, skew=sk, kurtosis=kt,
-                            reason='aproximadamente normal', scaler='None')
+            scaler = StandardScaler()
+            stats = dict(p_value=p_val, skew=sk, kurtosis=kt,
+                         reason='aproximadamente normal', scaler='StandardScaler')
+            return scaler, stats
 
 
         # ---------------- escolha de scaler ----------------
@@ -135,6 +161,11 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     # ------------------------------------------------------------------
     def fit(self, X, y=None):
         X_df = pd.DataFrame(X)
+        self.scalers_ = {}
+        self.report_ = {}
+        start_time = time.time()
+        if self.verbose in ("basic", "debug"):
+            self.logger.info("[DynamicScaler] start")
         strategy = self.strategy.lower() if self.strategy else None
 
         if strategy not in {'auto', 'standard', 'robust',
@@ -143,7 +174,10 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
 
         for col in X_df.columns:
             # --- seleção do scaler -----------------------------------
-            if strategy == 'auto':
+            if not self.enable_scaler:
+                scaler = None
+                stats = dict(reason='disabled', scaler='None')
+            elif strategy == 'auto':
                 scaler, stats = self._choose_auto(X_df[col])
             elif strategy == 'standard':
                 scaler = StandardScaler()
@@ -155,9 +189,9 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
                 scaler = MinMaxScaler()
                 stats  = dict(reason='global-minmax', scaler='MinMaxScaler')
             elif strategy == 'quantile':
-                if len(X_df) < 1000: 
+                if len(X_df) < 1000:
                     n_quantiles = min(1000, len(X_df))
-                    scaler = QuantileTransformer(n_quantiles=n_quantiles, output_distribution="uniform") 
+                    scaler = QuantileTransformer(n_quantiles=n_quantiles, output_distribution="uniform")
                 else:
                     scaler = QuantileTransformer(output_distribution='normal',
                                                 random_state=self.random_state)
@@ -174,19 +208,26 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
             self.report_[col]  = stats
 
             # --- log -------------------------------------------------
-            self._logger.info(
-                "Coluna '%s' → %s (p=%.3f, skew=%.2f, kurt=%.1f) | motivo: %s",
-                col, stats.get('scaler'),
-                stats.get('p_value', np.nan),
-                stats.get('skew',     np.nan),
-                stats.get('kurtosis', np.nan),
-                stats['reason']
-            )
+            if self.verbose == "debug":
+                self.logger.debug(
+                    "[DynamicScaler] %s -> %s (p=%.3f, skew=%.2f, kurt=%.1f) %s",
+                    col,
+                    stats.get('scaler'),
+                    stats.get('p_value', np.nan),
+                    stats.get('skew', np.nan),
+                    stats.get('kurtosis', np.nan),
+                    stats['reason']
+                )
 
         # serialização opcional
         if self.serialize:
             self.save(self._save_path)
 
+        self.fitted_ = True
+        self._fitted = True
+        if self.verbose in ("basic", "debug"):
+            elapsed = time.time() - start_time
+            self.logger.info("[DynamicScaler] fit completed in %.2fs", elapsed)
         return self
 
     # ------------------------------------------------------------------
@@ -194,20 +235,40 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     # ------------------------------------------------------------------
     def transform(self, X, return_df: bool = False):
         X_df = pd.DataFrame(X).copy()
+        if not getattr(self, "_fitted", False):
+            raise RuntimeError(
+                "DynamicScaler must be fitted before calling transform()."
+            )
+        start_time = time.time()
+        if self.verbose in ("basic", "debug"):
+            self.logger.info("[DynamicScaler] start")
 
         # Verifica se todas as colunas esperadas estão presentes
         missing = set(self.scalers_) - set(X_df.columns)
         if missing:
             raise ValueError(f"Colunas ausentes no transform: {missing}")
 
-        for col, scaler in self.scalers_.items():
-            if scaler is not None:
-                X_df[col] = scaler.transform(X_df[[col]])
+        if not self.enable_scaler:
+            self.logger.info("[DynamicScaler] scaler disabled, skipping transform")
+        else:
+            for col, scaler in self.scalers_.items():
+                if scaler is not None:
+                    X_df[col] = scaler.transform(X_df[[col]])
+                if self.verbose == "debug":
+                    self.logger.debug("[DynamicScaler] transformed %s", col)
+
+        if self.verbose in ("basic", "debug"):
+            elapsed = time.time() - start_time
+            self.logger.info("[DynamicScaler] transform completed in %.2fs", elapsed)
 
         return X_df if return_df else X_df.values
 
     def inverse_transform(self, X, return_df: bool = False):
         X_df = pd.DataFrame(X, columns=self.scalers_.keys()).copy()
+        if not getattr(self, "_fitted", False):
+            raise RuntimeError(
+                "DynamicScaler must be fitted before calling transform()."
+            )
         for col, scaler in self.scalers_.items():
             if scaler is not None:
                 X_df[col] = scaler.inverse_transform(X_df[[col]])
@@ -244,7 +305,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
 
         for feature in features:
             if feature not in self.scalers_:
-                self._logger.warning(
+                self.logger.warning(
                     "Variável '%s' não foi tratada no fit. Pulando...",
                     feature,
                 )
@@ -282,7 +343,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
             'strategy': self.strategy,
             'random_state': self.random_state
         }, path)
-        self._logger.info("Scalers salvos em %s", path)
+        self.logger.info("Scalers salvos em %s", path)
 
     def load(self, path: str | pathlib.Path):
         """Restaura scalers + relatório + metadados já treinados."""
@@ -291,5 +352,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         self.report_   = data.get('report', {})
         self.strategy  = data.get('strategy', self.strategy)
         self.random_state = data.get('random_state', self.random_state)
-        self._logger.info("Scalers carregados de %s", path)
+        self.fitted_ = True
+        self._fitted = True
+        self.logger.info("Scalers carregados de %s", path)
         return self
