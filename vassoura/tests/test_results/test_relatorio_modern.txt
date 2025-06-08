@@ -6,6 +6,6 @@ configfile: pyproject.toml
 plugins: anyio-4.9.0
 collecting ... collected 1 item
 
-vassoura/tests/test_importance.py::test_importance_shadow_filter PASSED  [100%]
+vassoura/tests/test_relatorio_modern.py::test_generate_report_modern PASSED [100%]
 
-============================== 1 passed in 3.01s ==============================
+============================== 1 passed in 9.36s ==============================

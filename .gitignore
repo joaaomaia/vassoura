@@ -43,8 +43,9 @@ site/
 docs/_build/
 imgs/olds
 bin/
+
 #test_results/
-run_tests.sh
+#run_tests.sh
 
 # Relatórios gerados
 #vassoura_report.html

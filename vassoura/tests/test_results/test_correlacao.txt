@@ -10,4 +10,4 @@ vassoura/tests/test_correlacao.py::test_corr_matrix_pearson PASSED       [ 33%]
 vassoura/tests/test_correlacao.py::test_corr_matrix_spearman PASSED      [ 66%]
 vassoura/tests/test_correlacao.py::test_corr_matrix_auto_detect PASSED   [100%]
 
-============================== 3 passed in 2.22s ==============================
+============================== 3 passed in 2.14s ==============================

@@ -4,8 +4,6 @@ cachedir: .pytest_cache
 rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
 configfile: pyproject.toml
 plugins: anyio-4.9.0
-collecting ... collected 1 item
+collecting ... collected 0 items
 
-vassoura/tests/test_relatorio_modern.py::test_generate_report_modern PASSED [100%]
-
-============================== 1 passed in 9.32s ==============================
+============================ no tests ran in 1.67s ============================
