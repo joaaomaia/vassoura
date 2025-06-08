@@ -673,8 +673,9 @@ class Vassoura:
 
         from .heuristics import importance
 
+        df_work = self._df_for_analysis()
         result = importance(
-            self.df_current,
+            df_work,
             target_col=self.target_col,
             keep_cols=list(self.keep_cols),
             params=params,

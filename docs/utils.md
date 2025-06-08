@@ -16,3 +16,7 @@ Compute a square `figsize` adequate for correlation heatmaps.
 ### `criar_dataset_pd_behavior(n_clientes=1000, max_anos=5, n_features=20, seed=42)`
 Generate a synthetic behavioural credit dataset useful for examples and
 unit tests.
+
+### `woe_encode(df, target, cols=None, smoothing=0.5)`
+Return a copy of `df` with selected categorical columns replaced by Weight of
+Evidence values. Only binary targets are supported.

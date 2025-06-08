@@ -37,6 +37,7 @@ __all__ = [
     "suggest_corr_method",
     "figsize_from_matrix",
     "criar_dataset_pd_behavior",
+    "woe_encode",
 ]
 
 # ---------------------------------------------------------------------------
@@ -359,3 +360,43 @@ def criar_dataset_pd_behavior(
     df["ever90m12"] = (probs > 0.8).astype(int)
 
     return df
+
+
+def woe_encode(
+    df: pd.DataFrame,
+    target: pd.Series,
+    *,
+    cols: Optional[List[str]] = None,
+    smoothing: float = 0.5,
+) -> pd.DataFrame:
+    """Return DataFrame with categorical columns replaced by WOE values.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Features to encode.
+    target : pandas.Series
+        Binary target column (0/1).
+    cols : list[str] | None, default None
+        Columns to encode. If ``None``, all object/category columns are used.
+    smoothing : float, default 0.5
+        Value added to counts to avoid division by zero.
+    """
+
+    if set(target.dropna().unique()) - {0, 1}:
+        raise ValueError("target must be binary (0/1) for WOE encoding")
+
+    df_out = df.copy()
+    cols = cols or df_out.select_dtypes(include=["object", "category"]).columns.tolist()
+    target = target.astype(int)
+
+    for col in cols:
+        s = df_out[col].astype(str)
+        tab = pd.crosstab(s, target).reindex(columns=[0, 1], fill_value=0)
+        tab = tab.astype(float) + smoothing
+        dist_good = tab[0] / tab[0].sum()
+        dist_bad = tab[1] / tab[1].sum()
+        mapping = np.log(dist_good / dist_bad)
+        df_out[col] = s.map(mapping).astype(float)
+
+    return df_out
