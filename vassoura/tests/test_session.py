@@ -5,36 +5,41 @@ import pytest
 
 from vassoura.core import Vassoura
 
+
 @pytest.fixture
 def df_toy():
     np.random.seed(42)
-    df = pd.DataFrame({
-        "a": np.random.normal(size=100),
-        "b": np.random.normal(size=100),
-        "c": np.random.normal(size=100),
-        "d": np.random.choice([0, 1], size=100),  # target
-    })
+    df = pd.DataFrame(
+        {
+            "a": np.random.normal(size=100),
+            "b": np.random.normal(size=100),
+            "c": np.random.normal(size=100),
+            "d": np.random.choice([0, 1], size=100),  # target
+        }
+    )
     df["b"] = df["a"] * 0.9 + np.random.normal(scale=0.1, size=100)  # alta correlação
     df["c"] = df["a"] * 0.5 + df["b"] * 0.5
     return df
 
 
 def test_corr_removal(df_toy):
-    vs = Vassoura(df_toy, target_col="d", heuristics=["corr"], thresholds={"corr": 0.85})
+    vs = Vassoura(df_toy, target_col="d", heuristics=["corr"], params={"corr": 0.85})
     df_clean = vs.run()
     assert df_clean.shape[1] < df_toy.shape[1], "Não removeu colunas correlacionadas"
-    assert any("corr>" in h["reason"] for h in vs.history), "Histórico não registra remoção por correlação"
+    assert any(
+        "corr>" in h["reason"] for h in vs.history
+    ), "Histórico não registra remoção por correlação"
 
 
 def test_vif_removal(df_toy):
-    vs = Vassoura(df_toy, target_col="d", heuristics=["vif"], thresholds={"vif": 5})
+    vs = Vassoura(df_toy, target_col="d", heuristics=["vif"], params={"vif": 5})
     df_clean = vs.run()
     assert df_clean.shape[1] <= df_toy.shape[1]
     assert isinstance(vs.dropped, list)
 
 
 def test_iv_removal(df_toy):
-    vs = Vassoura(df_toy, target_col="d", heuristics=["iv"], thresholds={"iv": 0.0001})
+    vs = Vassoura(df_toy, target_col="d", heuristics=["iv"], params={"iv": 0.0001})
     df_clean = vs.run()
     assert "iv<" in vs.history[-1]["reason"] or len(vs.dropped) == 0
 
@@ -59,7 +64,7 @@ def test_fractional_steps_session(df_toy):
         df_toy,
         target_col="d",
         heuristics=["corr", "vif"],
-        thresholds={"corr": 0.85, "vif": 5},
+        params={"corr": 0.85, "vif": 5},
         verbose="none",
     )
     df_full = vs_full.run()
@@ -68,7 +73,7 @@ def test_fractional_steps_session(df_toy):
         df_toy,
         target_col="d",
         heuristics=["corr", "vif"],
-        thresholds={"corr": 0.85, "vif": 5},
+        params={"corr": 0.85, "vif": 5},
         n_steps=2,
         vif_n_steps=2,
         verbose="none",

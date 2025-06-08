@@ -48,7 +48,9 @@ def test_search_dtypes_date_col():
             "target": [0, 1],
         }
     )
-    num, cat = vs.search_dtypes(df, target_col="target", date_col=["dt"], verbose="none")
+    num, cat = vs.search_dtypes(
+        df, target_col="target", date_col=["dt"], verbose="none"
+    )
     assert "dt" not in num and "dt" not in cat
 
 
@@ -133,7 +135,7 @@ def test_missing_removal():
         df,
         target_col="target",
         heuristics=["corr"],
-        thresholds={"missing": 0.2, "corr": 0.9},
+        params={"missing": 0.2, "corr": 0.9},
     )
     df_clean = vsess.run()
     assert "x3" not in df_clean.columns

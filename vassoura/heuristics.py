@@ -51,6 +51,7 @@ warnings.filterwarnings(
 # IV: remove variáveis com Information Value abaixo do threshold        #
 # --------------------------------------------------------------------- #
 
+
 def iv(
     df: pd.DataFrame,
     target_col: str,
@@ -99,123 +100,212 @@ def iv(
 # Importance: XGBoost/LightGBM SHAP gain ranking                        #
 # --------------------------------------------------------------------- #
 
+
 def importance(
     df: pd.DataFrame,
     target_col: str,
     *,
+    params: dict[str, Any] | None = None,
     sample_weight: pd.Series | None = None,
-    n_estimators: int = 100,
-    learning_rate: float = 0.1,
-    subsample: float = 0.8,
     keep_cols: list[str] | None = None,
-    drop_lowest: float | int = 0.2,
-    random_state: int = 42,
-) -> dict[str, any]:
-    """
-    Treina XGBoost rápido, remove features de baixa importância (shap_gain)
-    e trata automaticamente colunas não numéricas com WOE encoding no fallback.
+) -> Dict[str, Any]:
+    """Calcula importâncias de features comparadas a uma shadow feature."""
 
-    - Detecta colunas object e PeriodDtype → converte para category.
-    - Se XGBClassifier aceitar `enable_categorical`, usa.
-    - Caso contrário, tenta usar WOEEncoder para cat_cols; se não disponível,
-      faz one-hot encoding.
-    - Mantém sample_weight automático via compute_sample_weight (balanced).
-    """
-    try:
-        from xgboost import XGBClassifier
-        import shap
-    except ImportError:
-        warnings.warn("importance skipped – xgboost/shap not installed")
-        return {"removed": [], "artefacts": None, "meta": {}}
+    from sklearn.utils.class_weight import compute_sample_weight
+    from sklearn.base import clone
+    import inspect
 
-    try:
-        from sklearn.utils.class_weight import compute_sample_weight
-    except ImportError:
-        compute_sample_weight = None
-        warnings.warn("scikit-learn missing – sample_weight automático não disponível")
-
-    # tenta importar WOEEncoder
-    try:
-        from category_encoders.woe import WOEEncoder
-    except ImportError:
-        WOEEncoder = None
-        warnings.warn(
-            "category_encoders not installed – fallback para one-hot encoding em categoricals"
-        )
-
+    params = params or {}
     keep_cols = set(keep_cols or [])
-    X = df.drop(columns=[target_col]).copy()
-    y = df[target_col]
 
-    # 1) Sample weights automáticos
-    if sample_weight is None and compute_sample_weight is not None:
+    sample_frac = params.get("sample_frac", 0.7)
+    random_state = params.get("random_state", 42)
+    models_cfg = params.get("models")
+
+    rng = np.random.default_rng(random_state)
+
+    X_full = df.drop(columns=[target_col])
+    y_full = df[target_col]
+
+    if sample_weight is None:
         try:
-            sample_weight = compute_sample_weight("balanced", y)
-        except Exception as e:
-            warnings.warn(f"Não foi possível calcular sample_weight: {e}")
+            sample_weight = compute_sample_weight("balanced", y_full)
+        except Exception:
             sample_weight = None
 
-    # 2) Detecta colunas object ou PeriodDtype
-    cat_cols = [
-        col for col in X.columns
-        if X[col].dtype == object or is_period_dtype(X[col].dtype)
-    ]
-    if cat_cols:
-        for c in cat_cols:
-            X[c] = X[c].astype("category")
+    default_models: List[Dict[str, Any]] = []
 
-    # 3) Configura XGBClassifier com fallback para WOE / one-hot
-    xgb_kwargs = dict(
-        n_estimators=n_estimators,
-        learning_rate=learning_rate,
-        subsample=subsample,
-        eval_metric="logloss",
-        random_state=random_state,
-        n_jobs=-1,
-    )
     try:
-        # usa categoricals nativos, se disponível
-        model = XGBClassifier(**xgb_kwargs, enable_categorical=True)
-    except TypeError:
-        # fallback: WOEEncoder ou one-hot
-        if cat_cols:
-            if WOEEncoder is not None:
-                encoder = WOEEncoder(cols=cat_cols)
-                X = encoder.fit_transform(X, y)
+        from xgboost import XGBClassifier, XGBRegressor
+
+        tree_cls = XGBClassifier if y_full.nunique() == 2 else XGBRegressor
+        default_models.append(
+            {
+                "name": "xgb",
+                "estimator": tree_cls(
+                    n_estimators=50,
+                    max_depth=5,
+                    learning_rate=0.1,
+                    subsample=0.8,
+                    min_child_weight=max(1, int(0.05 * len(df))),
+                    n_jobs=-1,
+                    eval_metric="logloss" if y_full.nunique() == 2 else None,
+                    random_state=random_state,
+                ),
+            }
+        )
+    except Exception:  # pragma: no cover - optional
+        warnings.warn("XGBoost não disponível para importance")
+
+    try:
+        from lightgbm import LGBMClassifier, LGBMRegressor
+
+        lgbm_cls = LGBMClassifier if y_full.nunique() == 2 else LGBMRegressor
+        default_models.append(
+            {
+                "name": "lgbm",
+                "estimator": lgbm_cls(
+                    n_estimators=50,
+                    max_depth=5,
+                    min_child_samples=max(2, int(0.05 * len(df))),
+                    learning_rate=0.1,
+                    subsample=0.8,
+                    random_state=random_state,
+                    n_jobs=-1,
+                    verbosity=-1,
+                ),
+            }
+        )
+    except Exception:  # pragma: no cover - optional
+        warnings.warn("LightGBM não disponível para importance")
+
+    try:
+        from sklearn.linear_model import LogisticRegression
+
+        if y_full.nunique() == 2:
+            default_models.append(
+                {
+                    "name": "lr",
+                    "estimator": LogisticRegression(max_iter=200),
+                }
+            )
+    except Exception:  # pragma: no cover
+        warnings.warn("LogisticRegression indisponível")
+
+    models_cfg = models_cfg or default_models
+
+    importances: Dict[str, pd.Series] = {}
+    shadow_values: Dict[str, float] = {}
+    models_without_weights: List[str] = []
+
+    for cfg in models_cfg:
+        name = cfg.get("name", str(len(importances)))
+        estimator = clone(cfg.get("estimator"))
+        if cfg.get("hyperparams"):
+            estimator.set_params(**cfg["hyperparams"])
+
+        idx = rng.choice(len(df), size=int(len(df) * sample_frac), replace=False)
+        X = X_full.iloc[idx].copy()
+        y = y_full.iloc[idx]
+        sw = sample_weight[idx] if sample_weight is not None else None
+
+        X["__shadow__"] = rng.random(len(X))
+
+        # simple encoding for categoricals
+        for col in X.select_dtypes(include=["object", "category"]).columns:
+            X[col] = pd.Categorical(X[col]).codes
+        X = X.fillna(0)
+
+        fit_params = {}
+        sig = inspect.signature(estimator.fit)
+        if "sample_weight" in sig.parameters and sw is not None:
+            fit_params["sample_weight"] = sw
+        elif "class_weight" in sig.parameters and y.nunique() == 2:
+            if hasattr(estimator, "class_weight"):
+                estimator.set_params(class_weight="balanced")
             else:
-                X = pd.get_dummies(X, columns=cat_cols, drop_first=True)
-        model = XGBClassifier(**xgb_kwargs)
+                fit_params["class_weight"] = "balanced"
+            models_without_weights.append(name)
+        else:
+            if sw is not None:
+                models_without_weights.append(name)
 
-    # 4) Treina e calcula SHAP gain
-    model.fit(X, y, sample_weight=sample_weight)
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X)
-    gain = pd.Series(shap_values.std(axis=0), index=X.columns, name="shap_gain")
+        try:
+            estimator.fit(X, y, **fit_params)
+        except Exception:
+            estimator.fit(X, y)
+            if sw is not None and name not in models_without_weights:
+                models_without_weights.append(name)
 
-    # 5) Seleção de features a remover
-    if drop_lowest < 1:
-        cutoff = gain.quantile(drop_lowest)
-        removed = gain[gain <= cutoff].index.tolist()
-    else:
-        removed = gain.sort_values().head(int(drop_lowest)).index.tolist()
-    removed = [c for c in removed if c not in keep_cols]
+        if hasattr(estimator, "feature_importances_"):
+            imp = pd.Series(estimator.feature_importances_, index=X.columns)
+        elif hasattr(estimator, "coef_"):
+            coef = estimator.coef_[0] if estimator.coef_.ndim > 1 else estimator.coef_
+            imp = pd.Series(np.abs(coef), index=X.columns)
+        else:  # pragma: no cover - fallback
+            try:
+                import shap
 
-    return {
-        "removed": removed,
-        "artefacts": gain,
-        "meta": {
-            "drop_lowest": drop_lowest,
-            "n_removed": len(removed),
-            "n_features": X.shape[1],
-            "sample_weight_used": sample_weight is not None,
-        },
+                expl = shap.TreeExplainer(estimator)
+                sv = expl.shap_values(X)
+                if isinstance(sv, list):
+                    sv = sv[0]
+                imp = pd.Series(np.abs(sv).mean(axis=0), index=X.columns)
+            except Exception:
+                continue
+
+        shadow_val = float(imp.get("__shadow__", 0.0))
+        if "__shadow__" in imp:
+            imp = imp.drop("__shadow__")
+        shadow_values[name] = shadow_val
+        importances[name] = imp
+
+    if not importances:
+        return {
+            "kept": list(X_full.columns),
+            "removed": [],
+            "importances": None,
+            "meta": {},
+        }
+
+    imp_df = pd.DataFrame(importances)
+
+    kept: List[str] = []
+    removed: List[str] = []
+    for feat in imp_df.index:
+        if feat in keep_cols:
+            kept.append(feat)
+            continue
+        keep = False
+        for model_name, val in imp_df.loc[feat].items():
+            if val > shadow_values.get(model_name, 0.0):
+                keep = True
+                break
+        if keep:
+            kept.append(feat)
+        else:
+            removed.append(feat)
+
+    meta = {
+        "models_used": list(importances.keys()),
+        "sample_frac": sample_frac,
+        "random_state": random_state,
+        "sample_weight_provided": sample_weight is not None,
+        "models_without_weights": models_without_weights,
     }
 
+    return {
+        "kept": kept,
+        "removed": removed,
+        "importances": imp_df,
+        "meta": meta,
+    }
 
 
 # --------------------------------------------------------------------- #
 # Graph‑cut: mínimo conjunto de vértices em grafo de correlações        #
 # --------------------------------------------------------------------- #
+
 
 def graph_cut(
     df: pd.DataFrame,
@@ -272,6 +362,7 @@ def graph_cut(
 # Variance: low variance or dominant category removal                    #
 # --------------------------------------------------------------------- #
 
+
 def variance(
     df: pd.DataFrame,
     *,
@@ -296,7 +387,9 @@ def variance(
             continue
 
         if pd.api.types.is_numeric_dtype(s):
-            num = pd.to_numeric(valid, errors="coerce").replace([np.inf, -np.inf], np.nan)
+            num = pd.to_numeric(valid, errors="coerce").replace(
+                [np.inf, -np.inf], np.nan
+            )
             var = float(num.var())
             metrics[col] = var
             if var < var_threshold and col not in keep:
@@ -322,6 +415,7 @@ def variance(
 # --------------------------------------------------------------------- #
 # PSI Stability: population stability index between time windows         #
 # --------------------------------------------------------------------- #
+
 
 def psi_stability(
     df: pd.DataFrame,
@@ -402,6 +496,7 @@ def psi_stability(
 # KS Separation                                                          #
 # --------------------------------------------------------------------- #
 
+
 def ks_separation(
     df: pd.DataFrame,
     *,
@@ -451,6 +546,7 @@ def ks_separation(
 # --------------------------------------------------------------------- #
 # Permutation importance with LightGBM                                  #
 # --------------------------------------------------------------------- #
+
 
 def perm_importance_lgbm(
     df: pd.DataFrame,
@@ -516,6 +612,7 @@ def perm_importance_lgbm(
 # Partial correlation cluster                                            #
 # --------------------------------------------------------------------- #
 
+
 def partial_corr_cluster(
     df: pd.DataFrame,
     *,
@@ -567,6 +664,7 @@ def partial_corr_cluster(
 # Drift vs Target Leakage                                                #
 # --------------------------------------------------------------------- #
 
+
 def drift_vs_target_leakage(
     df: pd.DataFrame,
     *,
@@ -598,7 +696,9 @@ def drift_vs_target_leakage(
         else:
             # categórica: usa Spearman para data e IV p/ target
             codes = s.astype("category").cat.codes
-            corr_date = abs(pd.Series(codes).corr(pd.Series(date_ord), method="spearman"))
+            corr_date = abs(
+                pd.Series(codes).corr(pd.Series(date_ord), method="spearman")
+            )
             # informação de valor (IV)
             tab = pd.crosstab(s, target)
             if tab.shape[1] != 2:
@@ -619,5 +719,3 @@ def drift_vs_target_leakage(
         "artefacts": artefacts,
         "meta": {"drift_thr": drift_thr, "leak_thr": leak_thr},
     }
-
-

@@ -24,7 +24,7 @@ Restore the object to its initial state clearing caches and history.
 ### `help()`
 Print a short usage guide for the class.
 
-Setting `thresholds={'missing': 0.3}` will automatically remove
+Setting `params={'missing': 0.3}` will automatically remove
 columns with more than 30% missing values before other heuristics.
 
 Properties `history` and `dropped` expose the cleaning trail.
