@@ -761,8 +761,9 @@ class Vassoura:
         self._scaled_cols = num_cols
         self._scaler = DynamicScaler(**params)
         self._scaler.fit(df_work[num_cols])
-        scaled = self._scaler.transform(df_work[num_cols], return_df=True)
-        self.df_current[num_cols] = scaled[num_cols]
+        if self._scaler.enable_scaler:
+            scaled = self._scaler.transform(df_work[num_cols], return_df=True)
+            self.df_current[num_cols] = scaled[num_cols]
         self._df_scaled = self.df_current.copy()
 
     def _reverse_scaler(self) -> None:
