@@ -427,11 +427,11 @@ def generate_report(
     fig_vif_a.tight_layout()
     img_vif_after = _fig_to_base64(fig_vif_a)
 
-    # 8) Shadow-Feature Analysis
+    # 8) Noise Uniform-Feature Analysis
     if target_col is not None:
-        if "__shadow__" not in df_clean.columns:
+        if "__noise_uniform__" not in df_clean.columns:
             np.random.seed(0)
-            df_clean["__shadow__"] = np.random.rand(len(df_clean))
+            df_clean["__noise_uniform__"] = np.random.rand(len(df_clean))
 
         def _compute_ks(s: pd.Series, target: pd.Series, n_bins: int = 10) -> float:
             if s.dtype.kind in "bifc" and s.nunique() > 1:
@@ -461,7 +461,7 @@ def generate_report(
         X = df_clean[cols_eval]
         X = X.apply(lambda s: s.astype("category") if s.dtype == "object" else s)
         model = LGBMClassifier(
-            n_estimators=300,
+            n_estimators=100,
             learning_rate=0.1,
             max_depth=-1,
             subsample=0.8,
@@ -485,34 +485,63 @@ def generate_report(
             gain_arr = np.zeros(len(X.columns))
         gain_s = pd.Series(gain_arr, index=X.columns).sort_values(ascending=False)
 
-        n_features = len(ks_s)
-        fig_shadow, (ax_shap, ax_ks, ax_imp) = plt.subplots(
+        # ------------------------------------------------------------
+        # Trecho adaptado
+        # ------------------------------------------------------------
+        max_display_default = 50  # limite “saudável” p/ não poluir o gráfico
+
+        # 0. Decide quantas features exibir
+        total_feats = len(X.columns)
+        if "__noise_uniform__" in X.columns:
+            noise_uniform_pos = X.columns.get_loc("__noise_uniform__")  # posição da noise_uniform
+        else:
+            noise_uniform_pos = -1
+
+        display_count = (
+            total_feats
+            if total_feats <= max_display_default
+            else max(noise_uniform_pos + 1, max_display_default)
+        )
+
+        # 1. Cria figura já com altura proporcional às features mostradas
+        fig_noise_uniform, (ax_shap, ax_ks, ax_imp) = plt.subplots(
             1,
             3,
-            figsize=(18, 0.35 * n_features + 2),
+            figsize=(18, 0.35 * display_count + 2),
             dpi=110,
         )
 
-        # SHAP summary plot
+        # 2. Cria o objeto Explanation
         expl_values = shap.Explanation(
             shap_arr,
             base_values=np.zeros(len(X)),
             data=X,
             feature_names=X.columns,
         )
-        shap.plots.beeswarm(expl_values, show=False, plot_size=None, ax=ax_shap)
+
+        # 3. Plota a beeswarm com limite dinâmico
+        shap.plots.beeswarm(
+            expl_values,
+            show=False,
+            plot_size=None,
+            ax=ax_shap,
+            max_display=display_count,   # <<<<<< limite aplicado aqui
+        )
         ax_shap.set_title("SHAP Summary")
-        shadow_labels = [t.get_text() for t in ax_shap.get_yticklabels()]
-        if "__shadow__" in shadow_labels:
-            idx = shadow_labels.index("__shadow__")
+
+        # 4. Destaca a noise_uniform (se existir)
+        noise_uniform_labels = [t.get_text() for t in ax_shap.get_yticklabels()]
+        if "__noise_uniform__" in noise_uniform_labels:
+            idx = noise_uniform_labels.index("__noise_uniform__")
             coll = ax_shap.collections[idx]
             coll.set_sizes([120] * len(coll.get_sizes()))
             coll.set_edgecolors(["red"] * len(coll.get_edgecolors()))
 
+
         # KS by feature
         pal_ks = sns.color_palette("flare", len(ks_s))
         ks_colors = {
-            f: ("#FFB347" if f == "__shadow__" else pal_ks[i])
+            f: ("#FFB347" if f == "__noise_uniform__" else pal_ks[i])
             for i, f in enumerate(ks_s.index)
         }
         ks_df = ks_s.reset_index().rename(columns={"index": "feature", 0: "KS"})
@@ -531,7 +560,7 @@ def generate_report(
         # LightGBM Gain
         pal_imp = sns.color_palette("flare", len(gain_s))
         imp_colors = {
-            f: ("#FFB347" if f == "__shadow__" else pal_imp[i])
+            f: ("#FFB347" if f == "__noise_uniform__" else pal_imp[i])
             for i, f in enumerate(gain_s.index)
         }
         imp_df = gain_s.reset_index().rename(columns={"index": "feature", 0: "gain"})
@@ -547,8 +576,8 @@ def generate_report(
         )
         ax_imp.set_title("LightGBM Gain")
 
-        fig_shadow.tight_layout(w_pad=3)
-        img_shadow_triplet = _fig_to_base64(fig_shadow)
+        fig_noise_uniform.tight_layout(w_pad=3)
+        img_noise_uniform_triplet = _fig_to_base64(fig_noise_uniform)
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -572,13 +601,13 @@ def generate_report(
   --text: #212529;
   --muted: #6c757d;
   --radius: 8px;
-  --shadow: 0 2px 6px rgba(0,0,0,.05);
+  --noise_uniform: 0 2px 6px rgba(0,0,0,.05);
   --mono: "Fira Code", monospace;
 }}
 
 body {{background:var(--bg);color:var(--text);font:15px/1.5 "Inter",sans-serif;}}
 h1,h2,h3{{color:var(--primary);margin:0 0 .6em}}
-.section{{margin-bottom:48px;padding:32px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);}}
+.section{{margin-bottom:48px;padding:32px;background:var(--card);border-radius:var(--radius);box-noise_uniform:var(--noise_uniform);}}
 .feature-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;}}
 .feature-grid div{{padding:6px 10px;background:var(--bg);border-radius:var(--radius);}}
 .vif-grid{{display:flex;gap:12px;flex-wrap:wrap}}
@@ -586,7 +615,7 @@ h1,h2,h3{{color:var(--primary);margin:0 0 .6em}}
 .badge{{padding:2px 6px;border-radius:4px;font-size:.75rem;font-family:var(--mono)}}
 .badge.num{{background:var(--success);color:#fff;}}
 .badge.cat{{background:var(--warning);color:#000;}}
-.pill{{display:inline-flex;align-items:center;gap:6px;margin-right:8px;margin-bottom:8px;background:var(--primary);color:#fff;padding:6px 12px;border-radius:99px;font-weight:500;box-shadow:var(--shadow);}}
+.pill{{display:inline-flex;align-items:center;gap:6px;margin-right:8px;margin-bottom:8px;background:var(--primary);color:#fff;padding:6px 12px;border-radius:99px;font-weight:500;box-noise_uniform:var(--noise_uniform);}}
 .pill i{{opacity:.8}}
 table.audit{{width:100%;border-collapse:collapse;font-size:.9rem;}}
 table.audit th,table.audit td{{padding:6px 8px;border-bottom:1px solid #e1e6eb;}}
@@ -597,7 +626,7 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             </head>
             <body>
                 <h1>Relatório de Correlação & Multicolinearidade – Vassoura</h1>
-                <nav style="margin-bottom:16px"><a href="#tipos">Tipos</a> · <a href="#heatmaps">Heatmaps</a> · <a href="#vif">VIF</a> · <a href="#audit">Audit trail</a> · <a href="#shadow">Shadow</a></nav>
+                <nav style="margin-bottom:16px"><a href="#tipos">Tipos</a> · <a href="#heatmaps">Heatmaps</a> · <a href="#vif">VIF</a> · <a href="#audit">Audit trail</a> · <a href="#noise_uniform">Noise Uniform</a></nav>
                 <div class="section">
             """
         )
@@ -782,10 +811,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
 
         if target_col is not None:
             html += (
-                '<div class="section" id="shadow">'
-                "<h2>Shadow-Feature Analysis</h2>"
-                "<p>Inclui-se a variável aleatória <code>__shadow__</code> como referência.</p>"
-                f"<img src='{img_shadow_triplet}' alt='SHAP · KS · LightGBM Gain'>"
+                '<div class="section" id="noise_uniform">'
+                "<h2>Noise Uniform-Feature Analysis</h2>"
+                "<p>Inclui-se a variável aleatória <code>__noise_uniform__</code> como referência.</p>"
+                f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain'>"
                 "</div>\n"
             )
 

@@ -6,6 +6,7 @@ pytest -vv --tb=long vassoura/tests/test_autocorr.py                            
 pytest -vv --tb=long vassoura/tests/test_core.py                                 > vassoura/tests/test_results/test_core.txt
 pytest -vv --tb=long vassoura/tests/test_correlacao.py                           > vassoura/tests/test_results/test_correlacao.txt
 pytest -vv --tb=long vassoura/tests/test_importance.py                           > vassoura/tests/test_results/test_importance.txt
+pytest -vv --tb=long vassoura/tests/test_leakage.py                                  > vassoura/tests/test_results/test_leakage.txt
 pytest -vv --tb=long vassoura/tests/test_limpeza.py                              > vassoura/tests/test_results/test_limpeza.txt
 pytest -vv --tb=long vassoura/tests/test_relatorio_modern.py                     > vassoura/tests/test_results/test_relatorio_modern.txt
 pytest -vv --tb=long vassoura/tests/test_scaler.py                               > vassoura/tests/test_results/test_scaler.txt
@@ -15,3 +16,5 @@ pytest -vv --tb=long vassoura/tests/test_utils.py                               
 pytest -vv --tb=long vassoura/tests/test_variance.py                             > vassoura/tests/test_results/test_variance.txt
 pytest -vv --tb=long vassoura/tests/test_vassoura_integration_super.py           > vassoura/tests/test_results/test_vassoura_integration_super.txt
 pytest -vv --tb=long vassoura/tests/test_vif.py                                  > vassoura/tests/test_results/test_vif.txt
+
+
