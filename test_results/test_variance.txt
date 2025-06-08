@@ -11,27 +11,4 @@ vassoura/tests/test_variance.py::test_variance_keeps_variable PASSED     [ 50%]
 vassoura/tests/test_variance.py::test_dominant_category_removed PASSED   [ 75%]
 vassoura/tests/test_variance.py::test_keep_cols_protected PASSED         [100%]
 
-============================== warnings summary ===============================
-vassoura/tests/test_variance.py::test_variance_removes_constant
-vassoura/tests/test_variance.py::test_variance_keeps_variable
-vassoura/tests/test_variance.py::test_dominant_category_removed
-vassoura/tests/test_variance.py::test_keep_cols_protected
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\core.py:667: UserWarning: IV heuristic skipped: target_col not provided.
-    warnings.warn("IV heuristic skipped: target_col not provided.")
-
-vassoura/tests/test_variance.py::test_variance_removes_constant
-vassoura/tests/test_variance.py::test_variance_keeps_variable
-vassoura/tests/test_variance.py::test_dominant_category_removed
-vassoura/tests/test_variance.py::test_keep_cols_protected
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\core.py:692: UserWarning: Importance heuristic skipped: target_col not provided.
-    warnings.warn("Importance heuristic skipped: target_col not provided.")
-
-vassoura/tests/test_variance.py::test_variance_removes_constant
-vassoura/tests/test_variance.py::test_variance_keeps_variable
-vassoura/tests/test_variance.py::test_dominant_category_removed
-vassoura/tests/test_variance.py::test_keep_cols_protected
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\core.py:832: UserWarning: ks_separation skipped: target_col not provided.
-    warnings.warn("ks_separation skipped: target_col not provided.")
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================= 4 passed, 12 warnings in 2.50s ========================
+============================== 4 passed in 2.28s ==============================

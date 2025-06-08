@@ -24,18 +24,18 @@ vassoura/tests/test_scaler.py::test_roundtrip_identity[5000-robust] PASSED [ 34%
 vassoura/tests/test_scaler.py::test_roundtrip_identity[5000-minmax] PASSED [ 37%]
 vassoura/tests/test_scaler.py::test_roundtrip_identity[5000-quantile] PASSED [ 39%]
 vassoura/tests/test_scaler.py::test_roundtrip_identity[5000-None] PASSED [ 41%]
-vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[30] FAILED [ 44%]
-vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[500] FAILED [ 46%]
-vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[5000] FAILED [ 48%]
+vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[30] PASSED [ 44%]
+vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[500] PASSED [ 46%]
+vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[5000] PASSED [ 48%]
 vassoura/tests/test_scaler.py::test_standard_strategy_assigns_standard_scalers[30] PASSED [ 51%]
 vassoura/tests/test_scaler.py::test_standard_strategy_assigns_standard_scalers[500] PASSED [ 53%]
 vassoura/tests/test_scaler.py::test_standard_strategy_assigns_standard_scalers[5000] PASSED [ 55%]
 vassoura/tests/test_scaler.py::test_minmax_range[30] PASSED              [ 58%]
 vassoura/tests/test_scaler.py::test_minmax_range[500] PASSED             [ 60%]
 vassoura/tests/test_scaler.py::test_minmax_range[5000] PASSED            [ 62%]
-vassoura/tests/test_scaler.py::test_transform_without_fit_raises[30] FAILED [ 65%]
-vassoura/tests/test_scaler.py::test_transform_without_fit_raises[500] FAILED [ 67%]
-vassoura/tests/test_scaler.py::test_transform_without_fit_raises[5000] FAILED [ 69%]
+vassoura/tests/test_scaler.py::test_transform_without_fit_raises[30] PASSED [ 65%]
+vassoura/tests/test_scaler.py::test_transform_without_fit_raises[500] PASSED [ 67%]
+vassoura/tests/test_scaler.py::test_transform_without_fit_raises[5000] PASSED [ 69%]
 vassoura/tests/test_scaler.py::test_missing_columns_raises[30] PASSED    [ 72%]
 vassoura/tests/test_scaler.py::test_missing_columns_raises[500] PASSED   [ 74%]
 vassoura/tests/test_scaler.py::test_missing_columns_raises[5000] PASSED  [ 76%]
@@ -50,96 +50,6 @@ vassoura/tests/test_scaler.py::test_get_feature_names_and_report[500] PASSED [ 9
 vassoura/tests/test_scaler.py::test_get_feature_names_and_report[5000] PASSED [ 97%]
 vassoura/tests/test_scaler.py::test_nan_handling PASSED                  [100%]
 
-================================== FAILURES ===================================
-_____________________ test_auto_strategy_core_checks[30] ______________________
-
-sample_df =     const  already_scaled    normal    skewed  heavy_tail
-0     5.0        0.636962 -1.009618  1.997991   -0.173852
-1 ...190
-28    5.0        0.685542 -1.184118  1.413673   -9.296517
-29    5.0        0.650459 -0.661703  0.505146   -2.668815
-
-    def test_auto_strategy_core_checks(sample_df):
-        sc = DynamicScaler(strategy="auto", random_state=0, shapiro_p_val=0.01).fit(sample_df)
-        assert sc.scalers_["const"] is None
->       assert sc.scalers_["already_scaled"] is None
-E       assert MinMaxScaler() is None
-
-vassoura\tests\test_scaler.py:49: AssertionError
-_____________________ test_auto_strategy_core_checks[500] _____________________
-
-sample_df =      const  already_scaled    normal    skewed  heavy_tail
-0      5.0        0.636962  1.355438  0.043917    0.342936
-...8025  0.272032  0.357006   -0.797297
-499    5.0        0.843015 -0.766940  0.740832    2.201201
-
-[500 rows x 5 columns]
-
-    def test_auto_strategy_core_checks(sample_df):
-        sc = DynamicScaler(strategy="auto", random_state=0, shapiro_p_val=0.01).fit(sample_df)
-        assert sc.scalers_["const"] is None
->       assert sc.scalers_["already_scaled"] is None
-E       assert MinMaxScaler() is None
-
-vassoura\tests\test_scaler.py:49: AssertionError
-____________________ test_auto_strategy_core_checks[5000] _____________________
-
-sample_df =       const  already_scaled    normal    skewed  heavy_tail
-0       5.0        0.636962 -0.140774  0.065480   -0.31667...36 -0.786940  1.010046   -0.036924
-4999    5.0        0.947059  0.241509  0.861903   -1.695800
-
-[5000 rows x 5 columns]
-
-    def test_auto_strategy_core_checks(sample_df):
-        sc = DynamicScaler(strategy="auto", random_state=0, shapiro_p_val=0.01).fit(sample_df)
-        assert sc.scalers_["const"] is None
->       assert sc.scalers_["already_scaled"] is None
-E       assert MinMaxScaler() is None
-
-vassoura\tests\test_scaler.py:49: AssertionError
-____________________ test_transform_without_fit_raises[30] ____________________
-
-sample_df =     const  already_scaled    normal    skewed  heavy_tail
-0     5.0        0.636962 -1.009618  1.997991   -0.173852
-1 ...190
-28    5.0        0.685542 -1.184118  1.413673   -9.296517
-29    5.0        0.650459 -0.661703  0.505146   -2.668815
-
-    def test_transform_without_fit_raises(sample_df):
-        sc = DynamicScaler(strategy="robust")
->       with pytest.raises(RuntimeError):
-E       Failed: DID NOT RAISE <class 'RuntimeError'>
-
-vassoura\tests\test_scaler.py:68: Failed
-___________________ test_transform_without_fit_raises[500] ____________________
-
-sample_df =      const  already_scaled    normal    skewed  heavy_tail
-0      5.0        0.636962  1.355438  0.043917    0.342936
-...8025  0.272032  0.357006   -0.797297
-499    5.0        0.843015 -0.766940  0.740832    2.201201
-
-[500 rows x 5 columns]
-
-    def test_transform_without_fit_raises(sample_df):
-        sc = DynamicScaler(strategy="robust")
->       with pytest.raises(RuntimeError):
-E       Failed: DID NOT RAISE <class 'RuntimeError'>
-
-vassoura\tests\test_scaler.py:68: Failed
-___________________ test_transform_without_fit_raises[5000] ___________________
-
-sample_df =       const  already_scaled    normal    skewed  heavy_tail
-0       5.0        0.636962 -0.140774  0.065480   -0.31667...36 -0.786940  1.010046   -0.036924
-4999    5.0        0.947059  0.241509  0.861903   -1.695800
-
-[5000 rows x 5 columns]
-
-    def test_transform_without_fit_raises(sample_df):
-        sc = DynamicScaler(strategy="robust")
->       with pytest.raises(RuntimeError):
-E       Failed: DID NOT RAISE <class 'RuntimeError'>
-
-vassoura\tests\test_scaler.py:68: Failed
 ============================== warnings summary ===============================
 vassoura/tests/test_scaler.py::test_roundtrip_identity[500-auto]
 vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[500]
@@ -149,11 +59,4 @@ vassoura/tests/test_scaler.py::test_plot_histograms_runs[500]
     warnings.warn(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ===========================
-FAILED vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[30] - assert MinMaxScaler() is None
-FAILED vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[500] - assert MinMaxScaler() is None
-FAILED vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[5000] - assert MinMaxScaler() is None
-FAILED vassoura/tests/test_scaler.py::test_transform_without_fit_raises[30] - Failed: DID NOT RAISE <class 'RuntimeError'>
-FAILED vassoura/tests/test_scaler.py::test_transform_without_fit_raises[500] - Failed: DID NOT RAISE <class 'RuntimeError'>
-FAILED vassoura/tests/test_scaler.py::test_transform_without_fit_raises[5000] - Failed: DID NOT RAISE <class 'RuntimeError'>
-================== 6 failed, 37 passed, 4 warnings in 4.37s ===================
+======================= 43 passed, 4 warnings in 4.03s ========================

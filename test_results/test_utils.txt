@@ -10,4 +10,4 @@ vassoura/tests/test_utils.py::test_suggest_corr_method PASSED            [ 33%]
 vassoura/tests/test_utils.py::test_figsize_from_matrix_bounds PASSED     [ 66%]
 vassoura/tests/test_utils.py::test_criar_dataset_pd_behavior_columns PASSED [100%]
 
-============================== 3 passed in 2.16s ==============================
+============================== 3 passed in 2.13s ==============================
