@@ -276,6 +276,8 @@ class Vassoura:
             "variance_dom": 0.95,
             "psi_stability": 0.25,
             "ks_separation": 0.05,
+
+            # ainda em testes
             "perm_importance": 0.2,
             "partial_corr_cluster": 0.6,
             "drift_leak_drift": 0.3,
@@ -296,6 +298,7 @@ class Vassoura:
         self._variance_series: Optional[pd.Series] = None
         self._psi_series: Optional[pd.Series] = None
         self._ks_series: Optional[pd.Series] = None
+        
         self._perm_series: Optional[pd.Series] = None
         self._partial_graph: Any = None
         self._drift_leak_df: Optional[pd.DataFrame] = None
