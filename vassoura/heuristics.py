@@ -160,8 +160,11 @@ def importance(
                 ]
             )
             default_models.append({"name": "lr", "estimator": lr_est})
-    except Exception:  # pragma: no cover
-        warnings.warn("LogisticRegression indisponível")
+    except Exception as err:  # pragma: no cover
+        logger.warning(
+            "[Heuristic][importance] LogisticRegression failed: %s, bypassing",
+            err,
+        )
 
     try:
         from xgboost import XGBClassifier, XGBRegressor
@@ -287,7 +290,13 @@ def importance(
                     )
             else:
                 converged = not conv_warn
-        except Exception:
+        except Exception as err:
+            if name == "lr":
+                logger.warning(
+                    "[Heuristic][importance] LogisticRegression failed: %s, bypassing",
+                    err,
+                )
+                continue
             estimator.fit(X_model, y)
             converged = False
             if sw is not None and name not in models_without_weights:

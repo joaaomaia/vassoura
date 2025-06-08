@@ -11,8 +11,12 @@ from scipy import stats
 from scipy.stats import shapiro, skew, kurtosis
 
 from sklearn.base import BaseEstimator, TransformerMixin
+import warnings
 from sklearn.preprocessing import (
-    StandardScaler, RobustScaler, MinMaxScaler, QuantileTransformer
+    StandardScaler,
+    RobustScaler,
+    MinMaxScaler,
+    QuantileTransformer,
 )
 
 logger = logging.getLogger("vassoura.scaler")
@@ -43,7 +47,11 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         Usado no QuantileTransformer e em amostragens internas.
 
     logger : logging.Logger | None
-        Logger customizado; se None, cria logger básico.
+        Logger customizado; se None, usa ``vassoura.scaler``.
+    log_level : int | None
+        Nível de log a ser aplicado ao logger.
+    enable_scaler : bool
+        Se False, ``transform`` devolve o DataFrame inalterado.
     """
 
     # ------------------------------------------------------------------
@@ -58,7 +66,8 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
                  *,
                  verbose: str = 'none',
                  log_level: int | None = None,
-                 logger: logging.Logger | None = None):
+                 logger: logging.Logger | None = None,
+                 enable_scaler: bool = True):
         # store raw parameter for scikit-learn compatibility
         self.strategy = strategy
         self.serialize = serialize
@@ -66,6 +75,8 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         self.shapiro_p_val = shapiro_p_val
         self.random_state = random_state
         self.verbose = verbose
+        self.enable_scaler = enable_scaler
+        self.log_level = log_level
         self.logger = logger or globals()["logger"]
         if log_level is not None:
             self.logger.setLevel(log_level)
@@ -151,7 +162,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         X_df = pd.DataFrame(X)
         start_time = time.time()
         if self.verbose in ("basic", "debug"):
-            self.logger.info("[DynamicScaler] fitting %d cols", X_df.shape[1])
+            self.logger.info("[DynamicScaler] start")
         strategy = self.strategy.lower() if self.strategy else None
 
         if strategy not in {'auto', 'standard', 'robust',
@@ -160,7 +171,10 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
 
         for col in X_df.columns:
             # --- seleção do scaler -----------------------------------
-            if strategy == 'auto':
+            if not self.enable_scaler:
+                scaler = None
+                stats = dict(reason='disabled', scaler='None')
+            elif strategy == 'auto':
                 scaler, stats = self._choose_auto(X_df[col])
             elif strategy == 'standard':
                 scaler = StandardScaler()
@@ -172,9 +186,9 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
                 scaler = MinMaxScaler()
                 stats  = dict(reason='global-minmax', scaler='MinMaxScaler')
             elif strategy == 'quantile':
-                if len(X_df) < 1000: 
+                if len(X_df) < 1000:
                     n_quantiles = min(1000, len(X_df))
-                    scaler = QuantileTransformer(n_quantiles=n_quantiles, output_distribution="uniform") 
+                    scaler = QuantileTransformer(n_quantiles=n_quantiles, output_distribution="uniform")
                 else:
                     scaler = QuantileTransformer(output_distribution='normal',
                                                 random_state=self.random_state)
@@ -191,15 +205,16 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
             self.report_[col]  = stats
 
             # --- log -------------------------------------------------
-            self.logger.info(
-                "Coluna '%s' → %s (p=%.3f, skew=%.2f, kurt=%.1f) | motivo: %s",
-                col,
-                stats.get('scaler'),
-                stats.get('p_value', np.nan),
-                stats.get('skew', np.nan),
-                stats.get('kurtosis', np.nan),
-                stats['reason']
-            )
+            if self.verbose == "debug":
+                self.logger.debug(
+                    "[DynamicScaler] %s -> %s (p=%.3f, skew=%.2f, kurt=%.1f) %s",
+                    col,
+                    stats.get('scaler'),
+                    stats.get('p_value', np.nan),
+                    stats.get('skew', np.nan),
+                    stats.get('kurtosis', np.nan),
+                    stats['reason']
+                )
 
         # serialização opcional
         if self.serialize:
@@ -215,19 +230,27 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     # TRANSFORM / INVERSE_TRANSFORM
     # ------------------------------------------------------------------
     def transform(self, X, return_df: bool = False):
-        if not self.fitted_:
-            raise RuntimeError("Call 'fit' before 'transform'.")
         X_df = pd.DataFrame(X).copy()
+        if not self.fitted_:
+            warnings.warn("Call 'fit' before 'transform'.", UserWarning)
+            return X_df if return_df else X_df.values
         start_time = time.time()
+        if self.verbose in ("basic", "debug"):
+            self.logger.info("[DynamicScaler] start")
 
         # Verifica se todas as colunas esperadas estão presentes
         missing = set(self.scalers_) - set(X_df.columns)
         if missing:
             raise ValueError(f"Colunas ausentes no transform: {missing}")
 
-        for col, scaler in self.scalers_.items():
-            if scaler is not None:
-                X_df[col] = scaler.transform(X_df[[col]])
+        if not self.enable_scaler:
+            self.logger.info("[DynamicScaler] scaler disabled, skipping transform")
+        else:
+            for col, scaler in self.scalers_.items():
+                if scaler is not None:
+                    X_df[col] = scaler.transform(X_df[[col]])
+                if self.verbose == "debug":
+                    self.logger.debug("[DynamicScaler] transformed %s", col)
 
         if self.verbose in ("basic", "debug"):
             elapsed = time.time() - start_time
