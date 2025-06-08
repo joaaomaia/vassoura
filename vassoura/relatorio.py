@@ -40,7 +40,7 @@ from .vif import compute_vif
 
 __all__ = ["generate_report"]
 
-LOGGER = logging.getLogger("vassoura")
+LOGGER = logging.getLogger(__name__)
 
 
 def _fig_to_base64(fig: plt.Figure, *, fmt: str = "png") -> str:
@@ -415,16 +415,12 @@ def generate_report(
     n_before = len(series_before)
     n_after = len(series_after)
 
-    fig_vif_b, ax_b = plt.subplots(
-        figsize=(6, 0.25 * n_before + 1)
-    )
+    fig_vif_b, ax_b = plt.subplots(figsize=(6, 0.25 * n_before + 1))
     _plot_vif_barplot(series_before, "VIF antes da limpeza", ax_b, thr=vif_threshold)
     fig_vif_b.tight_layout()
     img_vif_before = _fig_to_base64(fig_vif_b)
 
-    fig_vif_a, ax_a = plt.subplots(
-        figsize=(6, 0.25 * n_after + 1)
-    )
+    fig_vif_a, ax_a = plt.subplots(figsize=(6, 0.25 * n_after + 1))
     _plot_vif_barplot(series_after, "VIF após a limpeza", ax_a, thr=vif_threshold)
     fig_vif_a.tight_layout()
     img_vif_after = _fig_to_base64(fig_vif_a)
@@ -733,7 +729,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                         g["items"].append((c, v))
                 for g in groups.values():
                     g["items"].sort(
-                        key=lambda x: (x[1] is not None, x[1] if x[1] is not None else -np.inf),
+                        key=lambda x: (
+                            x[1] is not None,
+                            x[1] if x[1] is not None else -np.inf,
+                        ),
                         reverse=True,
                     )
                 return groups
@@ -745,7 +744,9 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             html += '<table class="audit"><thead><tr><th>Heurística</th><th>Motivo</th><th>Colunas</th></tr></thead><tbody>'
             for heur, info in groups.items():
                 mot = info.get("mot", "")
-                html += f"<tr><td>{heur}</td><td>{mot}</td><td><div class='feature-grid'>"
+                html += (
+                    f"<tr><td>{heur}</td><td>{mot}</td><td><div class='feature-grid'>"
+                )
                 for col, val in info["items"]:
                     tipo = (
                         "num"

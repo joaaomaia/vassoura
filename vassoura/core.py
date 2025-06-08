@@ -20,12 +20,12 @@ import pandas as pd
 
 from .correlacao import compute_corr_matrix
 from .heuristics import (
-    graph_cut,
-    psi_stability,
-    ks_separation,
-    perm_importance_lgbm,
-    partial_corr_cluster,
     drift_vs_target_leakage,
+    graph_cut,
+    ks_separation,
+    partial_corr_cluster,
+    perm_importance_lgbm,
+    psi_stability,
 )
 from .relatorio import generate_report
 from .utils import parse_verbose
@@ -72,12 +72,7 @@ from .vif import compute_vif
 #     return iv
 
 # Logger padrão (o usuário pode sobrescrever o handler/formato fora da lib)
-logger = logging.getLogger("vassoura.iv")
-if not logger.handlers:  # evita handlers duplicados em notebooks
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
-    logger.addHandler(handler)
-logger.setLevel(logging.WARNING)  # default → não imprime nada “extra”
+logger = logging.getLogger(__name__)
 
 
 def _compute_iv(
@@ -266,7 +261,9 @@ class Vassoura:
         self.vif_n_steps = vif_n_steps
 
         self.process = process if process is not None else DEFAULT_PROCESS.copy()
-        self.heuristics = DEFAULT_HEURISTICS.copy() if heuristics is None else heuristics
+        self.heuristics = (
+            DEFAULT_HEURISTICS.copy() if heuristics is None else heuristics
+        )
         # Valores padrão, podem ser sobrescritos
         self.params = {
             "corr": 0.9,
@@ -276,7 +273,6 @@ class Vassoura:
             "variance_dom": 0.95,
             "psi_stability": 0.25,
             "ks_separation": 0.05,
-
             # ainda em testes
             "perm_importance": 0.2,
             "partial_corr_cluster": 0.6,
@@ -298,7 +294,7 @@ class Vassoura:
         self._variance_series: Optional[pd.Series] = None
         self._psi_series: Optional[pd.Series] = None
         self._ks_series: Optional[pd.Series] = None
-        
+
         self._perm_series: Optional[pd.Series] = None
         self._partial_graph: Any = None
         self._drift_leak_df: Optional[pd.DataFrame] = None
@@ -751,6 +747,7 @@ class Vassoura:
         if self.verbose:
             print("[Vassoura] Scaler process")
         from .scaler import DynamicScaler
+
         df_work = self._df_for_analysis()
         num_cols = df_work.select_dtypes(include=[np.number]).columns.tolist()
         if self.target_col in num_cols:
@@ -767,7 +764,9 @@ class Vassoura:
         self._df_scaled = self.df_current.copy()
 
     def _reverse_scaler(self) -> None:
-        cols = [c for c in getattr(self, "_scaled_cols", []) if c in self.df_current.columns]
+        cols = [
+            c for c in getattr(self, "_scaled_cols", []) if c in self.df_current.columns
+        ]
         if not cols or not hasattr(self, "_scaler"):
             return
         inv_df = self.df_current.copy()

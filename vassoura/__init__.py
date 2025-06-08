@@ -1,20 +1,20 @@
 __version__ = "0.1.0"
 
+from . import _compat  # importa ajustes de compatibilidade (não está no __all__)
+from .analisador import analisar_autocorrelacao
+from .autocorrelacao import compute_panel_acf, plot_panel_acf
+from .core import Vassoura
+from .correlacao import compute_corr_matrix, plot_corr_heatmap
+from .limpeza import clean
+from .logging_utils import configure_logging
+from .relatorio import generate_report
 from .utils import (
+    criar_dataset_pd_behavior,
+    figsize_from_matrix,
     search_dtypes,
     suggest_corr_method,
-    figsize_from_matrix,
-    criar_dataset_pd_behavior,
 )
-
-from . import _compat  # importa ajustes de compatibilidade (não está no __all__)
-from .correlacao import compute_corr_matrix, plot_corr_heatmap
 from .vif import compute_vif, remove_high_vif
-from .limpeza import clean
-from .relatorio import generate_report
-from .autocorrelacao import compute_panel_acf, plot_panel_acf
-from .analisador import analisar_autocorrelacao
-from .core import Vassoura
 
 __all__ = [
     "search_dtypes",
@@ -30,5 +30,6 @@ __all__ = [
     "compute_panel_acf",
     "plot_panel_acf",
     "analisar_autocorrelacao",
-    "Vassoura"
+    "Vassoura",
+    "configure_logging",
 ]

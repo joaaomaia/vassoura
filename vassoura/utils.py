@@ -16,8 +16,8 @@ suggest_corr_method – sugere método de correlação ideal
 figsize_from_matrix – ajusta tamanho de figura para heat‑maps
 
 Todas as funções são pensadas para fornecer *logs* detalhados via o
-módulo ``logging``. Para visualizar, no *script* principal configure
-algo como::
+módulo ``logging``. Para visualizar, no *script* principal utilize
+``vassoura.configure_logging`` ou configure manualmente algo como::
 
     import logging, vassoura
     logging.basicConfig(
@@ -43,13 +43,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Configuração de *logger* local
 # ---------------------------------------------------------------------------
-LOGGER = logging.getLogger("vassoura")
-if not LOGGER.handlers:
-    # Evita duplicar handlers quando importado diversas vezes
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(levelname)s | %(message)s"))
-    LOGGER.addHandler(_handler)
-    LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Logging helpers
@@ -85,6 +79,7 @@ def maybe_sample(df: pd.DataFrame, limit: int = 50000) -> pd.DataFrame:
     if len(df) > limit:
         return df.sample(n=limit, random_state=42)
     return df
+
 
 # ---------------------------------------------------------------------------
 # Funções internas auxiliares (não exportadas)

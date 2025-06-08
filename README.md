@@ -31,6 +31,11 @@ pip install -e .[dev]
 
 Caso esses pacotes não estejam disponíveis, o Vassoura faz *fallback* elegante para `pandas`.
 
+Para configurar os logs de todo o pacote basta executar::
+
+    import vassoura
+    vassoura.configure_logging()
+
 ---
 
 ## ✨ Principais Funcionalidades
@@ -76,6 +81,7 @@ A documentação detalhada (API, tutoriais, FAQ) mora na pasta [`docs/`](docs) e
 
 ```python
 import pandas as pd
+
 from vassoura import Vassoura
 
 # dataset fictício
