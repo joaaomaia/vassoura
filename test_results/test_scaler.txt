@@ -156,4 +156,4 @@ FAILED vassoura/tests/test_scaler.py::test_auto_strategy_core_checks[5000] - ass
 FAILED vassoura/tests/test_scaler.py::test_transform_without_fit_raises[30] - Failed: DID NOT RAISE <class 'RuntimeError'>
 FAILED vassoura/tests/test_scaler.py::test_transform_without_fit_raises[500] - Failed: DID NOT RAISE <class 'RuntimeError'>
 FAILED vassoura/tests/test_scaler.py::test_transform_without_fit_raises[5000] - Failed: DID NOT RAISE <class 'RuntimeError'>
-================== 6 failed, 37 passed, 4 warnings in 4.44s ===================
+================== 6 failed, 37 passed, 4 warnings in 4.37s ===================

@@ -14,8 +14,8 @@ vassoura/tests/test_advanced_heuristics.py::test_drift_vs_target_leakage PASSED 
 
 ============================== warnings summary ===============================
 vassoura/tests/test_advanced_heuristics.py::test_drift_vs_target_leakage
-  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\heuristics.py:529: FutureWarning: Series.view is deprecated and will be removed in a future version. Use ``astype`` as an alternative to change the dtype.
+  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\heuristics.py:746: FutureWarning: Series.view is deprecated and will be removed in a future version. Use ``astype`` as an alternative to change the dtype.
     date_ord = pd.to_datetime(df[date_col]).view("int64")
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 5 passed, 1 warning in 3.29s =========================
+======================== 5 passed, 1 warning in 3.42s =========================
