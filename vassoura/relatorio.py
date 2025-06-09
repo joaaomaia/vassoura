@@ -34,6 +34,7 @@ import pandas as pd
 import seaborn as sns
 
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
+from .corr_manager import CorrelationManager
 from .limpeza import clean
 from .utils import figsize_from_matrix, search_dtypes, suggest_corr_method
 from .vif import compute_vif
@@ -286,9 +287,9 @@ def generate_report(
         df_corr_source = df.copy()
         if target_col and target_col in df_corr_source:
             df_corr_source = df_corr_source.drop(columns=[target_col])
-        corr_before = compute_corr_matrix(
+        manager_before = CorrelationManager(
             df_corr_source,
-            method=corr_method_eff,
+            method="auto",
             target_col=None,
             include_target=False,
             limite_categorico=limite_categorico,
@@ -297,6 +298,12 @@ def generate_report(
             id_patterns=id_patterns,
             verbose=verbose,
         )
+        corr_before = manager_before.numeric_matrix(manager_before.dominant_numeric_method())
+        corr_method_eff_num = manager_before.dominant_numeric_method()
+        corr_before_cat = manager_before.cat_matrix()
+    else:
+        corr_before_cat = pd.DataFrame()
+        corr_method_eff_num = corr_method_eff
 
     # 4) Cálculo de VIF ANTES da limpeza (nunca inclui target)
     if vif_before is None:
@@ -364,7 +371,7 @@ def generate_report(
     before_large = len(corr_before.columns) > 40
     plot_corr_heatmap(
         corr_before,
-        title=f"Correlação antes da limpeza ({corr_method_eff.capitalize()})",
+        title=f"Correlação antes da limpeza ({corr_method_eff_num.capitalize()})",
         ax=ax_cb,
         annot=False if before_large else heatmap_labels,
         fmt=".2f",
@@ -373,8 +380,23 @@ def generate_report(
     )
     img_corr_before = _fig_to_base64(fig_corr_before)
 
-    # Placeholder para heatmap final (será gerado na seção Noise Uniform)
-    img_corr_after = ""
+    img_corr_before_cat = ""
+    if not corr_before_cat.empty:
+        fig_cat, ax_cat = plt.subplots(
+            figsize=figsize_from_matrix(len(corr_before_cat), base=heatmap_base_size)
+        )
+        plot_corr_heatmap(
+            corr_before_cat,
+            title="Cram\xe9r's V (Categ\xf3ricas)",
+            ax=ax_cat,
+            annot=False,
+            fmt=".2f",
+            highlight_labels=False,
+        )
+        img_corr_before_cat = _fig_to_base64(fig_cat)
+
+    img_corr_after_num = ""
+    img_corr_after_cat = ""
 
     # 7) Plots de VIF antes e após limpeza em uma única figura
     vif_before_s = vif_before.set_index("variable")["vif"]
@@ -581,30 +603,39 @@ def generate_report(
             errors="ignore",
         )
         if not df_hm.empty:
-            corr_after_hm = compute_corr_matrix(
+            manager_after = CorrelationManager(
                 df_hm,
-                method=corr_method_eff,
-                target_col=None,
-                include_target=False,
-                limite_categorico=limite_categorico,
-                force_categorical=force_categorical,
-                remove_ids=False,
+                method="auto",
                 verbose=False,
             )
-            fig_corr_after, ax_ca = plt.subplots(
-                figsize=figsize_from_matrix(len(corr_after_hm), base=heatmap_base_size)
+            corr_after_num = manager_after.numeric_matrix(manager_after.dominant_numeric_method())
+            corr_after_cat = manager_after.cat_matrix()
+            fig_corr_after_num, ax_can = plt.subplots(
+                figsize=figsize_from_matrix(len(corr_after_num), base=heatmap_base_size)
             )
-            after_large = len(corr_after_hm.columns) > 40
             plot_corr_heatmap(
-                corr_after_hm,
-                title=f"Correlação após limpeza ({corr_method_eff.capitalize()})",
-                ax=ax_ca,
-                annot=False if after_large else heatmap_labels,
+                corr_after_num,
+                title=f"Numéricas ({manager_after.dominant_numeric_method().capitalize()})",
+                ax=ax_can,
+                annot=False,
                 fmt=".2f",
-                highlight_labels=after_large,
-                corr_threshold=corr_threshold,
+                highlight_labels=False,
             )
-            img_corr_after = _fig_to_base64(fig_corr_after)
+            img_corr_after_num = _fig_to_base64(fig_corr_after_num)
+            img_corr_after_cat = ""
+            if not corr_after_cat.empty:
+                fig_corr_after_cat, ax_cac = plt.subplots(
+                    figsize=figsize_from_matrix(len(corr_after_cat), base=heatmap_base_size)
+                )
+                plot_corr_heatmap(
+                    corr_after_cat,
+                    title="Cram\xe9r's V",
+                    ax=ax_cac,
+                    annot=False,
+                    fmt=".2f",
+                    highlight_labels=False,
+                )
+                img_corr_after_cat = _fig_to_base64(fig_corr_after_cat)
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -730,11 +761,23 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             f"""
             <div class="section" id="heatmaps">
                 <h2>Heatmaps de Correlação</h2>
-                <h3>Antes da Limpeza ({corr_method_eff.capitalize()})</h3>
-                <img src="{img_corr_before}" alt="flare_corr_antes">
+                <div style='display:flex;gap:20px'>
+                    <div style='flex:1'>
+                        <h3>Numéricas ({corr_method_eff_num.capitalize()})</h3>
+                        <img src="{img_corr_before}" alt="corr_num">
+                    </div>
+                    <div style='flex:1'>
+                        <h3>Categóricas (Cram\xe9r's V)</h3>
+                        <img src="{img_corr_before_cat}" alt="corr_cat">
+                    </div>
+                </div>
+                <p style='margin-top:8px;font-size:0.9rem'>
+                Numéricas: Pearson ou Spearman conforme detecção de normalidade.\
+                Ordinais usam Spearman. Binária×Numérica usa Point-Biserial.\
+                Categóricas usam Cram\xe9r's V ou Qui-quadrado.</p>
+            </div>
             """
         )
-        html += "</div>\n"
 
         # Seção de VIF
         html += textwrap.dedent(
@@ -832,11 +875,13 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 '<div class="section" id="noise_uniform">'
                 "<h2>Noise Uniform-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__noise_uniform__</code> como referência.</p>"
-                "<div style='display:flex;gap:20px;align-items:flex-start'>"
-                f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain' style='flex:1 1 60%'>"
+                f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain' style='width:100%;margin-bottom:10px'>"
             )
-            if img_corr_after:
-                html += f"<img src='{img_corr_after}' alt='Heatmap final' style='flex:1 1 40%'>"
+            html += "<div style='display:flex;gap:20px'>"
+            if img_corr_after_num:
+                html += f"<img src='{img_corr_after_num}' alt='Corr Num' style='flex:1'>"
+            if img_corr_after_cat:
+                html += f"<img src='{img_corr_after_cat}' alt='Corr Cat' style='flex:1'>"
             html += "</div></div>\n"
 
         html += "</body></html>\n"

@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from .correlacao import compute_corr_matrix
+from .corr_manager import CorrelationManager
 from .heuristics import (
     drift_vs_target_leakage,
     graph_cut,
@@ -575,14 +576,14 @@ class Vassoura:
         while True:
             df_work = self._df_for_analysis()
             if self._corr_matrix is None or iteration > 0:
-                self._corr_matrix = compute_corr_matrix(
+                manager = CorrelationManager(
                     df_work,
-                    method="auto",
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
                 )
+                self._corr_matrix = manager.compute()
             upper_tri = self._corr_matrix.where(
                 np.triu(np.ones_like(self._corr_matrix, dtype=bool), k=1)
             )

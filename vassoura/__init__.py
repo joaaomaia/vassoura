@@ -5,6 +5,7 @@ from .analisador import analisar_autocorrelacao
 from .autocorrelacao import compute_panel_acf, plot_panel_acf
 from .core import Vassoura
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
+from .corr_manager import CorrelationManager
 from .limpeza import clean
 from .logging_utils import configure_logging
 from .relatorio import generate_report
@@ -24,6 +25,7 @@ __all__ = [
     "criar_dataset_pd_behavior",
     "compute_corr_matrix",
     "plot_corr_heatmap",
+    "CorrelationManager",
     "compute_vif",
     "remove_high_vif",
     "target_leakage",
