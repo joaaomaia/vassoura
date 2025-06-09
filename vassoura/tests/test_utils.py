@@ -1,10 +1,10 @@
 import pandas as pd
 import pytest
 from vassoura.utils import (
-    suggest_corr_method,
-    figsize_from_matrix,
+    adaptive_sampling,
     criar_dataset_pd_behavior,
-    maybe_sample,
+    figsize_from_matrix,
+    suggest_corr_method,
 )
 
 def test_suggest_corr_method():
@@ -26,12 +26,12 @@ def test_criar_dataset_pd_behavior_columns():
     assert df["AnoMesReferencia"].dtype == int
 
 
-def test_maybe_sample_stratify_and_order():
+def test_adaptive_sampling_stratify_and_order():
     df = pd.DataFrame({
         "target": [0] * 80 + [1] * 20,
         "date": pd.date_range("2020-01-01", periods=100, freq="D"),
     })
-    sampled = maybe_sample(
+    sampled = adaptive_sampling(
         df,
         max_cells=40,
         stratify_col="target",

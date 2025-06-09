@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from numpy.linalg import LinAlgError
 
-from .utils import maybe_sample, parse_verbose, search_dtypes
+from .utils import adaptive_sampling, parse_verbose, search_dtypes
 
 try:
     from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -140,7 +140,7 @@ def compute_vif(
             rows_before - rows_after,
         )
     if adaptive_sampling:
-        data = maybe_sample(
+        data = adaptive_sampling(
             data,
             stratify_col=target_col,
             date_cols=date_col,

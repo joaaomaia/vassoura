@@ -43,8 +43,8 @@ import seaborn as sns
 from scipy.stats import chi2_contingency
 
 from .utils import (
+    adaptive_sampling,
     figsize_from_matrix,
-    maybe_sample,
     parse_verbose,
     search_dtypes,
     suggest_corr_method,
@@ -173,7 +173,7 @@ def compute_corr_matrix(
             )
         data = df_work[num_cols].copy()
         if adaptive_sampling:
-            data = maybe_sample(
+            data = adaptive_sampling(
                 data,
                 stratify_col=target_col,
                 date_cols=date_col,
@@ -224,7 +224,7 @@ def compute_corr_matrix(
             raise ValueError("Não há colunas categóricas para calcular Cramér‑V")
         data = df_work[cat_cols].copy()
         if adaptive_sampling:
-            data = maybe_sample(
+            data = adaptive_sampling(
                 data,
                 stratify_col=target_col,
                 date_cols=date_col,

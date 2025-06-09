@@ -9,6 +9,7 @@ import pandas as pd
 
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.base import clone
+from sklearn.exceptions import ConvergenceWarning
 
 from .scaler import DynamicScaler
 from .utils import woe_encode
@@ -181,7 +182,25 @@ class BorutaMultiShap:
                     except Exception:
                         fit_params["class_weight"] = "balanced"
 
-                estimator.fit(Xi, yi, **fit_params)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "error",
+                        category=ConvergenceWarning,
+                    )
+                    try:
+                        estimator.fit(Xi, yi, **fit_params)
+                    except ConvergenceWarning:
+                        if logger is not None:
+                            logger.info(
+                                "Convergence warning with %s; switching solver",
+                                name,
+                            )
+                        try:
+                            estimator.set_params(solver="liblinear", max_iter=500)
+                        except Exception:
+                            pass
+                        warnings.filterwarnings("ignore", category=ConvergenceWarning)
+                        estimator.fit(Xi, yi, **fit_params)
 
                 from shap.maskers import Independent
 
