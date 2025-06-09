@@ -134,6 +134,10 @@ def importance(
     sample_frac = params.pop("sample_frac", 0.7)
     random_state = params.pop("random_state", 42)
     models_cfg = params.pop("models", None)
+    cv_folds = params.pop("cv_folds", 5)
+    cv_type = params.pop("cv_type", "stratified")
+    shuffle = params.pop("shuffle", True)
+    approval_ratio_fold = params.pop("approval_ratio_fold", 0.7)
 
     lr_params = params
     lr_params.setdefault("max_iter", 500)
@@ -237,103 +241,136 @@ def importance(
     scaler.fit(X)
     X_scaled = pd.DataFrame(scaler.transform(X), columns=X.columns)
 
-    importances: Dict[str, pd.Series] = {}
-    noise_values: Dict[str, float] = {}
+    importances_folds: Dict[str, List[pd.Series]] = {}
+    noise_values_folds: Dict[str, List[float]] = {}
     models_without_weights: List[str] = []
     conv_info: Dict[str, bool] = {}
 
     for cfg in models_cfg:
-        name = cfg.get("name", str(len(importances)))
-        estimator = clone(cfg.get("estimator"))
-        if cfg.get("hyperparams"):
-            estimator.set_params(**cfg["hyperparams"])
+        name = cfg.get("name", str(len(importances_folds)))
+        importances_folds[name] = []
+        noise_values_folds[name] = []
+        conv_info[f"{name}_converged"] = True
 
-        if isinstance(estimator, Pipeline):
-            X_model = X
+    if cv_folds <= 1:
+        splits = [(np.arange(len(X_scaled)), np.arange(len(X_scaled)))]
+    else:
+        if cv_type == "time_series":
+            from sklearn.model_selection import TimeSeriesSplit
+
+            splitter = TimeSeriesSplit(n_splits=cv_folds)
+            splits = list(splitter.split(X_scaled))
+        elif cv_type == "stratified" and y.nunique() <= len(y):
+            from sklearn.model_selection import StratifiedKFold
+
+            splitter = StratifiedKFold(
+                n_splits=cv_folds, shuffle=shuffle, random_state=random_state
+            )
+            splits = list(splitter.split(X_scaled, y))
         else:
-            X_model = X_scaled.copy()
+            from sklearn.model_selection import KFold
 
-        fit_params = {}
-        sig = inspect.signature(estimator.fit)
-        if "sample_weight" in sig.parameters and sw is not None:
-            fit_params["sample_weight"] = sw
-        elif "class_weight" in sig.parameters and y.nunique() == 2:
-            if hasattr(estimator, "class_weight"):
-                estimator.set_params(class_weight="balanced")
+            splitter = KFold(n_splits=cv_folds, shuffle=shuffle, random_state=random_state)
+            splits = list(splitter.split(X_scaled))
+
+    for train_idx, _ in splits:
+        for cfg in models_cfg:
+            name = cfg.get("name", str(len(importances_folds)))
+            estimator = clone(cfg.get("estimator"))
+            if cfg.get("hyperparams"):
+                estimator.set_params(**cfg["hyperparams"])
+
+            if isinstance(estimator, Pipeline):
+                X_train = X.iloc[train_idx]
             else:
-                fit_params["class_weight"] = "balanced"
-            models_without_weights.append(name)
-        else:
-            if sw is not None:
-                models_without_weights.append(name)
+                X_train = X_scaled.iloc[train_idx]
 
-        converged = True
-        try:
-            with warnings.catch_warnings(record=True) as warn:
-                warnings.simplefilter("always", ConvergenceWarning)
-                estimator.fit(X_model, y, **fit_params)
-                conv_warn = any(isinstance(w.message, ConvergenceWarning) for w in warn)
-            if (
-                conv_warn
-                and hasattr(estimator, "set_params")
-                and "max_iter" in estimator.get_params()
-            ):
-                logger.info(
-                    "%s atingiu limite de iterações; tentando novamente com max_iter duplicado",
-                    name,
-                )
-                new_iter = estimator.get_params()["max_iter"] * 2
-                estimator.set_params(max_iter=new_iter)
-                with warnings.catch_warnings(record=True) as warn2:
-                    warnings.simplefilter("always", ConvergenceWarning)
-                    estimator.fit(X_model, y, **fit_params)
-                    converged = not any(
-                        isinstance(w.message, ConvergenceWarning) for w in warn2
-                    )
+            fit_params = {}
+            sig = inspect.signature(estimator.fit)
+            sw_train = sw[train_idx] if sw is not None else None
+            if "sample_weight" in sig.parameters and sw_train is not None:
+                fit_params["sample_weight"] = sw_train
+            elif "class_weight" in sig.parameters and y.nunique() == 2:
+                if hasattr(estimator, "class_weight"):
+                    estimator.set_params(class_weight="balanced")
+                else:
+                    fit_params["class_weight"] = "balanced"
+                models_without_weights.append(name)
             else:
-                converged = not conv_warn
-        except Exception as err:
-            if name == "lr":
-                logger.warning(
-                    "[Heuristic][importance] LogisticRegression failed: %s, bypassing",
-                    err,
-                )
-                continue
-            estimator.fit(X_model, y)
-            converged = False
-            if sw is not None and name not in models_without_weights:
-                models_without_weights.append(name)
+                if sw_train is not None:
+                    models_without_weights.append(name)
 
-        est_final = (
-            estimator.steps[-1][1] if isinstance(estimator, Pipeline) else estimator
-        )
-        if hasattr(est_final, "feature_importances_"):
-            imp = pd.Series(est_final.feature_importances_, index=X_model.columns)
-        elif hasattr(est_final, "coef_"):
-            coef = est_final.coef_[0] if est_final.coef_.ndim > 1 else est_final.coef_
-            imp = pd.Series(np.abs(coef), index=X_model.columns)
-        else:  # pragma: no cover - fallback
+            converged = True
             try:
-                import shap
+                with warnings.catch_warnings(record=True) as warn:
+                    warnings.simplefilter("always", ConvergenceWarning)
+                    estimator.fit(X_train, y.iloc[train_idx], **fit_params)
+                    conv_warn = any(
+                        isinstance(w.message, ConvergenceWarning) for w in warn
+                    )
+                if (
+                    conv_warn
+                    and hasattr(estimator, "set_params")
+                    and "max_iter" in estimator.get_params()
+                ):
+                    logger.info(
+                        "%s atingiu limite de iterações; tentando novamente com max_iter duplicado",
+                        name,
+                    )
+                    new_iter = estimator.get_params()["max_iter"] * 2
+                    estimator.set_params(max_iter=new_iter)
+                    with warnings.catch_warnings(record=True) as warn2:
+                        warnings.simplefilter("always", ConvergenceWarning)
+                        estimator.fit(X_train, y.iloc[train_idx], **fit_params)
+                        converged = not any(
+                            isinstance(w.message, ConvergenceWarning) for w in warn2
+                        )
+                else:
+                    converged = not conv_warn
+            except Exception as err:
+                if name == "lr":
+                    logger.warning(
+                        "[Heuristic][importance] LogisticRegression failed: %s, bypassing",
+                        err,
+                    )
+                    continue
+                estimator.fit(X_train, y.iloc[train_idx])
+                converged = False
+                if sw_train is not None and name not in models_without_weights:
+                    models_without_weights.append(name)
 
-                expl = shap.TreeExplainer(est_final)
-                sv = expl.shap_values(X_model)
-                if isinstance(sv, list):
-                    sv = sv[0]
-                imp = pd.Series(np.abs(sv).mean(axis=0), index=X_model.columns)
-            except Exception:
-                continue
+            est_final = (
+                estimator.steps[-1][1] if isinstance(estimator, Pipeline) else estimator
+            )
+            if hasattr(est_final, "feature_importances_"):
+                imp = pd.Series(est_final.feature_importances_, index=X_train.columns)
+            elif hasattr(est_final, "coef_"):
+                coef = est_final.coef_[0] if est_final.coef_.ndim > 1 else est_final.coef_
+                imp = pd.Series(np.abs(coef), index=X_train.columns)
+            else:  # pragma: no cover - fallback
+                try:
+                    import shap
 
-        noise_val = float(imp.get("__noise_uniform__", 0.0))
-        if "__noise_uniform__" in imp:
-            imp = imp.drop("__noise_uniform__")
-        noise_values[name] = noise_val
-        importances[name] = imp
-        conv_info[f"{name}_converged"] = converged
-        if not converged:
-            logger.info("Modelo %s n\u00e3o convergiu", name)
+                    expl = shap.TreeExplainer(est_final)
+                    sv = expl.shap_values(X_train)
+                    if isinstance(sv, list):
+                        sv = sv[0]
+                    imp = pd.Series(np.abs(sv).mean(axis=0), index=X_train.columns)
+                except Exception:
+                    continue
 
-    if not importances:
+            noise_val = float(imp.get("__noise_uniform__", 0.0))
+            if "__noise_uniform__" in imp:
+                imp = imp.drop("__noise_uniform__")
+
+            noise_values_folds[name].append(noise_val)
+            importances_folds[name].append(imp)
+            conv_info[f"{name}_converged"] = conv_info[f"{name}_converged"] and converged
+            if not converged:
+                logger.info("Modelo %s n\u00e3o convergiu", name)
+
+    has_data = any(len(v) > 0 for v in importances_folds.values())
+    if not has_data:
         return {
             "kept": list(X_full.columns),
             "removed": [],
@@ -341,7 +378,21 @@ def importance(
             "meta": {},
         }
 
-    imp_df = pd.DataFrame(importances)
+    imp_med: Dict[str, pd.Series] = {}
+    fold_ratio: Dict[str, pd.Series] = {}
+    noise_values: Dict[str, float] = {}
+    for name, imps in importances_folds.items():
+        if not imps:
+            continue
+        df_imp = pd.concat(imps, axis=1)
+        med = df_imp.median(axis=1)
+        noise_med = float(np.median(noise_values_folds.get(name, [0.0])))
+        ratio = (df_imp.gt(noise_med)).sum(axis=1) / df_imp.shape[1]
+        imp_med[name] = med
+        fold_ratio[name] = ratio
+        noise_values[name] = noise_med
+
+    imp_df = pd.DataFrame(imp_med)
 
     kept: List[str] = []
     removed: List[str] = []
@@ -350,8 +401,9 @@ def importance(
             kept.append(feat)
             continue
         keep = False
-        for model_name, val in imp_df.loc[feat].items():
-            if val > noise_values.get(model_name, 0.0):
+        for model_name in imp_df.columns:
+            ratio = fold_ratio.get(model_name, pd.Series()).get(feat, 0.0)
+            if ratio >= approval_ratio_fold:
                 keep = True
                 break
         if keep:
@@ -360,11 +412,14 @@ def importance(
             removed.append(feat)
 
     meta = {
-        "models_used": list(importances.keys()),
+        "models_used": list(imp_df.columns),
         "sample_frac": sample_frac,
         "random_state": random_state,
         "sample_weight_provided": sample_weight is not None,
         "models_without_weights": models_without_weights,
+        "cv_folds": cv_folds,
+        "cv_type": cv_type,
+        "approval_ratio_fold": approval_ratio_fold,
         **conv_info,
     }
 
