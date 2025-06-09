@@ -20,9 +20,11 @@ def test_importance_shadow_filter():
                         "sklearn.linear_model"
                     ).linear_model.LogisticRegression(max_iter=200),
                 }
-            ]
+            ],
+            "cv_folds": 3,
+            "cv_type": "stratified",
         }
     }
     vs = Vassoura(df, target_col="target", heuristics=["importance"], params=params)
     out = vs.run()
-    assert "models_used" in vs._importance_meta
+    assert vs._importance_meta.get("cv_folds") == 3

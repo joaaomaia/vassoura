@@ -29,9 +29,10 @@ def test_generate_report_modern(tmp_path):
         patch("shap.TreeExplainer") as MockExpl,
     ):
         MockLGBM.return_value.fit.return_value = MockLGBM.return_value
+        n_feats = df.drop(columns=["target"]).shape[1] - 1
         MockExpl.return_value.shap_values.return_value = [
-            np.zeros((len(df), 63)),
-            np.zeros((len(df), 63)),
+            np.zeros((len(df), n_feats)),
+            np.zeros((len(df), n_feats)),
         ]
         path = Path(sess.generate_report(path=tmp_path / "r.html"))
         assert MockLGBM.call_args[1]["class_weight"] == "balanced"
@@ -48,4 +49,4 @@ def test_generate_report_modern(tmp_path):
     assert html.count('<div class="vif-grid">') == 1
     assert "KS Separation" not in html
     assert "flare_" in html
-    assert "__shadow__" in sess.df_current.columns
+    assert "__noise_uniform__" in sess.df_current.columns
