@@ -34,7 +34,6 @@ import pandas as pd
 import seaborn as sns
 
 from .correlacao import compute_corr_matrix, plot_corr_heatmap
-from .corr_manager import CorrelationManager
 from .limpeza import clean
 from .utils import figsize_from_matrix, search_dtypes, suggest_corr_method
 from .vif import compute_vif
@@ -610,7 +609,7 @@ def generate_report(
                 corr_after,
                 title="Correlação pós-limpeza (Spearman)",
                 ax=ax_can,
-                annot=False,
+                annot=True,
                 fmt=".2f",
                 highlight_labels=False,
             )

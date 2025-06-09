@@ -185,6 +185,18 @@ def compute_corr_matrix(
         num_cols = num_cols + cat_cols
         cat_cols = []
 
+    # ------------------------------------------------------------------
+    # Remove colunas constantes que inviabilizam a correlação
+    # ------------------------------------------------------------------
+    cols_check = num_cols + cat_cols
+    const_cols = [c for c in cols_check if df_work[c].nunique(dropna=False) <= 1]
+    if const_cols:
+        if verbose:
+            LOGGER.info("Ignorando colunas constantes na correlação: %s", const_cols)
+        df_work = df_work.drop(columns=const_cols)
+        num_cols = [c for c in num_cols if c not in const_cols]
+        cat_cols = [c for c in cat_cols if c not in const_cols]
+
     # Escolha automática do método para variáveis numéricas
     numeric_method = method
     if method == "auto":
