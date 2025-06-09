@@ -391,7 +391,9 @@ class Vassoura:
                 ),
                 errors="ignore",
             )
-            adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
+            adaptive_flag = (
+                False if self._sample_df is not None else self.adaptive_sampling
+            )
             self._corr_matrix = compute_corr_matrix(
                 base,
                 method="auto",
@@ -412,7 +414,9 @@ class Vassoura:
                 ),
                 errors="ignore",
             )
-            adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
+            adaptive_flag = (
+                False if self._sample_df is not None else self.adaptive_sampling
+            )
             self._corr_matrix_final = compute_corr_matrix(
                 df_final,
                 method="auto",
@@ -433,7 +437,9 @@ class Vassoura:
                     ),
                     errors="ignore",
                 )
-                adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
+                adaptive_flag = (
+                    False if self._sample_df is not None else self.adaptive_sampling
+                )
                 self._vif_df_before = compute_vif(
                     df_before,
                     target_col=self.target_col,
@@ -454,7 +460,9 @@ class Vassoura:
                     ),
                     errors="ignore",
                 )
-                adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
+                adaptive_flag = (
+                    False if self._sample_df is not None else self.adaptive_sampling
+                )
                 self._vif_df = compute_vif(
                     df_final,
                     target_col=self.target_col,
@@ -791,8 +799,8 @@ class Vassoura:
         """
         Aplica a heurística de mínimo conjunto de vértices (graph-cut):
         1) Remove target_col (se existir) antes de montar grafo.
-        2) Filtra apenas colunas numéricas.
-        3) Chama graph_cut(), obtém lista 'removed' e repassa a _drop().
+        2) Chama graph_cut() considerando colunas categóricas via WoE.
+        3) Remove colunas retornadas.
         """
         thr = self.params.get("graph_cut", 0.9)
         if self.verbose:
@@ -809,21 +817,18 @@ class Vassoura:
             errors="ignore",
         )
 
-        # 2) Selecionar somente colunas numéricas
-        num_cols = df_for_graph.select_dtypes(include=[np.number]).columns.tolist()
-        df_for_graph = df_for_graph[num_cols]
-
-        # Se tiver 0 ou 1 coluna numérica, não faz sentido rodar o grafo
+        # Se tiver 0 ou 1 coluna após filtros, não faz sentido rodar o grafo
         if len(df_for_graph.columns) <= 1:
             if self.verbose:
                 print(
-                    f"[Vassoura] Pulando Graph-cut (só {len(df_for_graph.columns)} coluna(s) numérica(s))."
+                    f"[Vassoura] Pulando Graph-cut (só {len(df_for_graph.columns)} coluna(s) analisável(is))."
                 )
             return
 
-        # 3) Chamar a função graph_cut do módulo heuristics
+        # 2) Chamar a função graph_cut do módulo heuristics
         result = graph_cut(
             df_for_graph,
+            target_col=self.target_col,
             corr_threshold=thr,
             keep_cols=list(self.keep_cols),
         )
