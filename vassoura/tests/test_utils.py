@@ -1,5 +1,11 @@
 import pandas as pd
-from vassoura.utils import suggest_corr_method, figsize_from_matrix, criar_dataset_pd_behavior
+import pytest
+from vassoura.utils import (
+    suggest_corr_method,
+    figsize_from_matrix,
+    criar_dataset_pd_behavior,
+    maybe_sample,
+)
 
 def test_suggest_corr_method():
     assert suggest_corr_method(["a", "b"], []) == "pearson"
@@ -18,3 +24,20 @@ def test_criar_dataset_pd_behavior_columns():
     assert expected_cols <= set(df.columns)
     # AnoMesReferencia deve estar no formato YYYYMM (int)
     assert df["AnoMesReferencia"].dtype == int
+
+
+def test_maybe_sample_stratify_and_order():
+    df = pd.DataFrame({
+        "target": [0] * 80 + [1] * 20,
+        "date": pd.date_range("2020-01-01", periods=100, freq="D"),
+    })
+    sampled = maybe_sample(
+        df,
+        max_cells=40,
+        stratify_col="target",
+        date_cols=["date"],
+        random_state=0,
+    )
+    assert len(sampled) == 20
+    assert sampled["target"].mean() == pytest.approx(df["target"].mean())
+    assert sampled["date"].is_monotonic_increasing

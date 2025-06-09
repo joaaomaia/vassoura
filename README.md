@@ -51,7 +51,10 @@ Para configurar os logs de todo o pacote basta executar::
 
 Além disso:
 
-* **Adaptive Sampling**: para *datasets* gigantes, amostra até 50 k linhas sem comprometer tendências.
+* **Adaptive Sampling**: amostragem estratificada (por `target_col`) até ~50 k linhas,
+  preservando a ordem temporal caso `date_cols` seja informado. Pode ser aplicada
+  como processo (`"adaptive_sampling"`) para reutilizar a mesma amostra em todo o
+  pipeline. O resultado de `run()` sempre mantém todas as linhas originais do dataset.
 * **Dynamic Engine**: basta passar `engine="polars"` ou `"dask"` que o pipeline inteiro muda de engrenagem.
 * **Suporte total a IDs & Datas**: informe `id_cols` e `date_cols` na instância e elas ficarão protegidas do processo de limpeza e ordenação.
 
@@ -91,20 +94,39 @@ df = pd.read_csv("dados.csv")
 
 vs = Vassoura(
     df,
-    target_col="ever90m12",
-    id_cols=["cpf"],             # preserva ordenação por CPF
-    date_cols=["AnoMesReferencia"],
-    heuristics=["corr", "vif", "iv", "graph_cut", "variance"],
-    params={"corr": 0.9, "vif": 8, "iv": 0.02, "variance": 1e-4},
-    engine="polars",
-    n_steps=3,                   # 3 rodadas para correlação
-    vif_n_steps=1,
+    id_cols=["id", "member_id"],
+    date_cols=["safra"],
+    ignore_cols=["url"] + temporal_columns,
+    drop_ignored=True,
+    target_col=TARGET,
+    verbose="basic",
+    engine="pandas",
+    adaptive_sampling=True,
+    process=["missing", "variance", "scaler"],
+    heuristics=[
+        "target_leakage",
+        "iv",
+        "graph_cut",
+        "corr",
+        "vif",
+        "importance",
+        "boruta_multi_shap",
+        "ks_separation",
+    ],
+    params={
+        "missing": 0.60,
+        "target_leakage": 0.70,
+        "corr": 0.80,
+        "vif": 10,
+        "iv": 0.01,
+        "graph_cut": 0.9,
+    },
+    n_steps=5,
+    vif_n_steps=2,
 )
 
-# 1️⃣ Limpeza
-df_clean = vs.run()
+df_clean = vs.run(recompute=True)
 
-# 2️⃣ Relatório interativo
 vs.generate_report("relatorio_corr.html")
 ```
 

@@ -140,7 +140,11 @@ def compute_vif(
             rows_before - rows_after,
         )
     if adaptive_sampling:
-        data = maybe_sample(data)
+        data = maybe_sample(
+            data,
+            stratify_col=target_col,
+            date_cols=date_col,
+        )
 
     if engine == "dask":
         try:

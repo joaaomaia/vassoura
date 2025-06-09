@@ -173,7 +173,11 @@ def compute_corr_matrix(
             )
         data = df_work[num_cols].copy()
         if adaptive_sampling:
-            data = maybe_sample(data)
+            data = maybe_sample(
+                data,
+                stratify_col=target_col,
+                date_cols=date_col,
+            )
         corr_engine = engine
         if engine == "dask":
             try:
@@ -220,7 +224,11 @@ def compute_corr_matrix(
             raise ValueError("Não há colunas categóricas para calcular Cramér‑V")
         data = df_work[cat_cols].copy()
         if adaptive_sampling:
-            data = maybe_sample(data)
+            data = maybe_sample(
+                data,
+                stratify_col=target_col,
+                date_cols=date_col,
+            )
         corr = _cramers_v_matrix(data)
         if verbose:
             LOGGER.info(
