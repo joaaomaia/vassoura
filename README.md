@@ -57,14 +57,15 @@ Além disso:
 
 ### Heurísticas avançadas
 
-As seguintes heurísticas extras podem ser combinadas livremente no parâmetro `heuristics`:
+As seguintes heurísticas extras podem ser combinadas via parâmetro `heuristics`:
 
-* `psi_stability` – calcula o Population Stability Index para duas janelas temporais.
-* `ks_separation` – remove variáveis com baixo poder de separação pelo KS-statistic.
-* `perm_importance` – ranking rápido via LightGBM e permutação.
-* `partial_corr_cluster` – clusterização por correlação parcial com corte mínimo em grafo.
-* `drift_leak` – identifica vazamentos de informação relacionados à data de referência.
-* `target_leakage` – destaca colunas com alta correlação com o target (possível vazamento).
+* `psi_stability` – avalia a estabilidade de distribuição (PSI) entre janelas temporais.
+* `ks_separation` – descarta variáveis com baixo poder discriminatório medido pelo KS.
+* `perm_importance` – ordena features usando LightGBM e permutação aleatória.
+* `partial_corr_cluster` – remove grupos redundantes via correlação parcial e grafo mínimo.
+* `drift_leak` – destaca atributos ligados à data e ao target, sinalizando vazamentos.
+* `target_leakage` – identifica colunas fortemente correlacionadas ao target (possível vazamento).
+* `boruta_multi_shap` – seleção robusta combinando Boruta, vários modelos e SHAP.
 
 ---
 

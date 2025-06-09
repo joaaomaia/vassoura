@@ -373,24 +373,8 @@ def generate_report(
     )
     img_corr_before = _fig_to_base64(fig_corr_before)
 
-    # Heatmap final (apenas se houver variáveis removidas)
+    # Placeholder para heatmap final (será gerado na seção Noise Uniform)
     img_corr_after = ""
-    show_final = bool(dropped_cols)
-    if show_final and not corr_after.empty:
-        fig_corr_after, ax_ca = plt.subplots(
-            figsize=figsize_from_matrix(len(corr_after), base=heatmap_base_size)
-        )
-        after_large = len(corr_after.columns) > 40
-        plot_corr_heatmap(
-            corr_after,
-            title=f"Correlação após limpeza ({corr_method_eff.capitalize()})",
-            ax=ax_ca,
-            annot=False if after_large else heatmap_labels,
-            fmt=".2f",
-            highlight_labels=after_large,
-            corr_threshold=corr_threshold,
-        )
-        img_corr_after = _fig_to_base64(fig_corr_after)
 
     # 7) Plots de VIF antes e após limpeza em uma única figura
     vif_before_s = vif_before.set_index("variable")["vif"]
@@ -586,6 +570,43 @@ def generate_report(
         fig_noise_uniform.tight_layout(w_pad=3)
         img_noise_uniform_triplet = _fig_to_base64(fig_noise_uniform)
 
+        # Heatmap final para features restantes (sem target nem colunas ignoradas)
+        df_hm = df_clean.drop(
+            columns=[
+                target_col,
+                *(id_cols or []),
+                *(date_cols or []),
+                *(ignore_cols or []),
+                "__noise_uniform__",
+            ],
+            errors="ignore",
+        )
+        if not df_hm.empty:
+            corr_after_hm = compute_corr_matrix(
+                df_hm,
+                method=corr_method_eff,
+                target_col=None,
+                include_target=False,
+                limite_categorico=limite_categorico,
+                force_categorical=force_categorical,
+                remove_ids=False,
+                verbose=False,
+            )
+            fig_corr_after, ax_ca = plt.subplots(
+                figsize=figsize_from_matrix(len(corr_after_hm), base=heatmap_base_size)
+            )
+            after_large = len(corr_after_hm.columns) > 40
+            plot_corr_heatmap(
+                corr_after_hm,
+                title=f"Correlação após limpeza ({corr_method_eff.capitalize()})",
+                ax=ax_ca,
+                annot=False if after_large else heatmap_labels,
+                fmt=".2f",
+                highlight_labels=after_large,
+                corr_threshold=corr_threshold,
+            )
+            img_corr_after = _fig_to_base64(fig_corr_after)
+
     # 8) Montagem do relatório HTML
     if style == "html":
         html = textwrap.dedent(
@@ -714,15 +735,6 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 <img src="{img_corr_before}" alt="flare_corr_antes">
             """
         )
-        if show_final and img_corr_after:
-            html += textwrap.dedent(
-                f"""
-                <h3>Após a Limpeza ({corr_method_eff.capitalize()})</h3>
-                <img src="{img_corr_after}" alt="flare_corr_depois">
-                """
-            )
-        elif not show_final:
-            html += "<p><i>Nenhuma variável removida; não houve necessidade de limpeza por correlação ou multicolinearidade.</i></p>\n"
         html += "</div>\n"
 
         # Seção de VIF
@@ -821,9 +833,12 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 '<div class="section" id="noise_uniform">'
                 "<h2>Noise Uniform-Feature Analysis</h2>"
                 "<p>Inclui-se a variável aleatória <code>__noise_uniform__</code> como referência.</p>"
-                f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain'>"
-                "</div>\n"
+                "<div style='display:flex;gap:20px;align-items:flex-start'>"
+                f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain' style='flex:1 1 60%'>"
             )
+            if img_corr_after:
+                html += f"<img src='{img_corr_after}' alt='Heatmap final' style='flex:1 1 40%'>"
+            html += "</div></div>\n"
 
         html += "</body></html>\n"
         output_path.write_bytes(html.encode("utf-8", errors="ignore"))
