@@ -11,9 +11,11 @@ Train a light XGBoost model and drop the lowest scoring features using SHAP gain
 Categorical columns are automatically encoded via a lightweight WOE scheme.
 Requires `xgboost` and `shap` installed.
 
-### `graph_cut(df, corr_threshold=0.9, keep_cols=None, method='pearson')`
+### `graph_cut(df, corr_threshold=0.9, keep_cols=None, method='pearson', target_col=None)`
 Build a correlation graph and compute a minimal vertex cover to determine
-which variables to drop.
+which variables to drop. Categorical columns are temporarily WOE encoded
+(missing values treated as their own category) when a binary `target_col`
+is provided.
 
 ### `variance(df, var_threshold=1e-4, dom_threshold=0.95, min_nonnull=30, keep_cols=None)`
 Drop features with very low numerical variance or with a single dominant

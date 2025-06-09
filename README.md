@@ -45,7 +45,7 @@ Para configurar os logs de todo o pacote basta executar::
 | **`Vassoura` (classe)** | Sessão *stateful* que concentra todo o fluxo de limpeza   | cache inteligente, logs granulares, suporte a `id_cols`, `date_cols`, `ignore_cols`, remoção fracionada (`n_steps`, `vif_n_steps`) |
 | **Correlação**          | `compute_corr_matrix`, `plot_corr_heatmap`                | Pearson ou Spearman com codificação WoE temporária; *heat‑maps* auto‑dimensionados                                                 |
 | **VIF**                 | `compute_vif`, `remove_high_vif`                          | Algoritmo NumPy puro (fallback) ou Statsmodels; compatível com `polars` e `dask`                                                   |
-| **Heurísticas Plug‑in** | `corr`, `vif`, `iv`, `importance`, `graph_cut`, `missing`, `variance` | escolha via parâmetro; **graph‑cut** resolve correlações complexas em grafo mínimo                                                 |
+| **Heurísticas Plug‑in** | `corr`, `vif`, `iv`, `importance`, `graph_cut`, `missing`, `variance` | escolha via parâmetro; **graph‑cut** resolve correlações complexas em grafo mínimo com WoE temporário |
 | **Relatórios**          | `generate_report`                                         | HTML ou Markdown com seções ilustradas, imagens embutidas, lista de variáveis removidas                                            |
 | **Autocorrelação**      | `compute_panel_acf`, `analisar_autocorrelacao`            | ACF por painel (contrato, cliente, etc.) com interpretação automática                                                              |
 

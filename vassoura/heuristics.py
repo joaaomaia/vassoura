@@ -15,19 +15,19 @@ Cada heurística deve seguir a *assinatura*:
 O módulo não conhece `Vassoura`. Ele deve ser *stateless* e puro.
 A sessão garantirá cacheamento.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
 import logging
-
-from .scaler import DynamicScaler
-
 import os
 import warnings
+from typing import Any, Dict, List
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from .heuristics_boruta_multi_shap import BorutaMultiShap
+from .scaler import DynamicScaler
 
 # Dependências opcionais (import inside functions)
 
@@ -120,11 +120,12 @@ def importance(
 ) -> Dict[str, Any]:
     """Calcula importâncias de features comparadas a uma uniform noise feature."""
 
-    from sklearn.utils.class_weight import compute_sample_weight
-    from sklearn.base import clone
-    from sklearn.pipeline import Pipeline
-    from sklearn.exceptions import ConvergenceWarning
     import inspect
+
+    from sklearn.base import clone
+    from sklearn.exceptions import ConvergenceWarning
+    from sklearn.pipeline import Pipeline
+    from sklearn.utils.class_weight import compute_sample_weight
 
     params = params or {}
     scaler_args = scaler_args or {}
@@ -270,7 +271,9 @@ def importance(
         else:
             from sklearn.model_selection import KFold
 
-            splitter = KFold(n_splits=cv_folds, shuffle=shuffle, random_state=random_state)
+            splitter = KFold(
+                n_splits=cv_folds, shuffle=shuffle, random_state=random_state
+            )
             splits = list(splitter.split(X_scaled))
 
     for train_idx, _ in splits:
@@ -345,7 +348,9 @@ def importance(
             if hasattr(est_final, "feature_importances_"):
                 imp = pd.Series(est_final.feature_importances_, index=X_train.columns)
             elif hasattr(est_final, "coef_"):
-                coef = est_final.coef_[0] if est_final.coef_.ndim > 1 else est_final.coef_
+                coef = (
+                    est_final.coef_[0] if est_final.coef_.ndim > 1 else est_final.coef_
+                )
                 imp = pd.Series(np.abs(coef), index=X_train.columns)
             else:  # pragma: no cover - fallback
                 try:
@@ -365,7 +370,9 @@ def importance(
 
             noise_values_folds[name].append(noise_val)
             importances_folds[name].append(imp)
-            conv_info[f"{name}_converged"] = conv_info[f"{name}_converged"] and converged
+            conv_info[f"{name}_converged"] = (
+                conv_info[f"{name}_converged"] and converged
+            )
             if not converged:
                 logger.info("Modelo %s n\u00e3o convergiu", name)
 
@@ -439,14 +446,17 @@ def importance(
 def graph_cut(
     df: pd.DataFrame,
     *,
+    target_col: str | None = None,
     corr_threshold: float = 0.9,
     keep_cols: List[str] | None = None,
     method: str = "pearson",
 ) -> Dict[str, Any]:
     """
-    Constrói grafo onde arestas unem pares |corr| > corr_threshold e resolve
-    minimum vertex cover para quebrar todas as arestas com o menor nº
-    possível de vértices (features).
+    Constrói grafo onde arestas unem pares |corr| > ``corr_threshold`` e
+    resolve ``minimum vertex cover`` para quebrar todas as arestas com o
+    menor número possível de vértices (features).  Quando ``target_col`` é
+    informado e binário, colunas categóricas são temporariamente codificadas
+    por Weight of Evidence, tratando valores nulos como categoria própria.
     """
     try:
         import networkx as nx
@@ -456,7 +466,28 @@ def graph_cut(
         return {"removed": [], "artefacts": None, "meta": {}}
 
     keep_cols = set(keep_cols or [])
-    corr = df.corr(method=method).abs()
+
+    df_work = df.drop(columns=[target_col], errors="ignore").copy()
+    target = df[target_col] if target_col and target_col in df.columns else None
+
+    cat_cols = df_work.select_dtypes(include=["object", "category"]).columns.tolist()
+    if cat_cols:
+        df_work[cat_cols] = df_work[cat_cols].fillna("__MISSING__")
+        if target is not None and target.dropna().nunique() == 2:
+            try:
+                from .utils import woe_encode
+
+                df_work[cat_cols] = woe_encode(
+                    df_work[cat_cols], target, cols=cat_cols
+                )[cat_cols]
+            except Exception:
+                df_work[cat_cols] = df_work[cat_cols].apply(
+                    lambda s: pd.factorize(s)[0]
+                )
+        else:
+            df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s)[0])
+
+    corr = df_work.corr(method=method).abs()
     np.fill_diagonal(corr.values, 0)
     edges = [
         (i, j)
