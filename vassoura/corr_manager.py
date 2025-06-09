@@ -11,7 +11,7 @@ import pandas as pd
 from scipy.stats import normaltest, pearsonr, spearmanr, pointbiserialr, chi2_contingency
 from sklearn.metrics import mutual_info_score
 
-from .utils import parse_verbose, search_dtypes
+from .utils import parse_verbose, search_dtypes, woe_encode
 from .correlacao import _cramers_v, _cramers_v_matrix
 
 
@@ -38,15 +38,39 @@ class CorrelationManager:
         method: str = "auto",
         verbose: str | bool = "basic",
         engine: str = "pandas",
+        cramer: bool = False,
     ) -> None:
         verbose, verbose_types = parse_verbose(verbose)
         self.verbose = verbose
         self.method = method
         self.engine = engine
+        self.cramer = cramer
+        self.target = None
+        if target_col and target_col in df.columns:
+            self.target = df[target_col]
+        df_work = df.copy()
+        if not cramer and self.target is not None and self.target.dropna().nunique() == 2:
+            t = self.target
+            if set(t.dropna().unique()) != {0, 1}:
+                mapping = {val: i for i, val in enumerate(sorted(t.dropna().unique()))}
+                t = t.map(mapping)
+            try:
+                tmp = df_work.drop(columns=[target_col], errors="ignore")
+                tmp = woe_encode(tmp, t)
+                for col in tmp.columns:
+                    df_work[col] = tmp[col]
+            except Exception:
+                cat_cols_tmp = df_work.select_dtypes(include=["object", "category"]).columns
+                for c in cat_cols_tmp:
+                    df_work[c] = pd.factorize(df_work[c])[0]
+        elif not cramer:
+            cat_cols_tmp = [c for c in df_work.select_dtypes(include=["object", "category"]).columns if c != target_col]
+            for c in cat_cols_tmp:
+                df_work[c] = pd.factorize(df_work[c])[0]
         self.df = (
-            df.drop(columns=[target_col], errors="ignore")
+            df_work.drop(columns=[target_col], errors="ignore")
             if target_col and not include_target
-            else df.copy()
+            else df_work.copy()
         )
         num_cols, cat_cols = search_dtypes(
             self.df,
