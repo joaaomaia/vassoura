@@ -48,6 +48,7 @@ from .utils import (
     parse_verbose,
     search_dtypes,
     suggest_corr_method,
+    woe_encode,
 )
 
 __all__ = [
@@ -163,6 +164,26 @@ def compute_corr_matrix(
         verbose=verbose,
         verbose_types=verbose_types,
     )
+
+    # ------------------------------------------------------------------
+    # WoE fallback for categorical features when Cramér is disabled
+    # ------------------------------------------------------------------
+    if not cramer and cat_cols:
+        target_series = None
+        if target_col and target_col in df.columns:
+            target_series = df[target_col]
+            if target_series.dropna().nunique() == 2 and set(target_series.dropna().unique()) != {0, 1}:
+                mapping = {val: i for i, val in enumerate(sorted(target_series.dropna().unique()))}
+                target_series = target_series.map(mapping)
+        if target_series is not None and target_series.dropna().nunique() == 2:
+            try:
+                df_work[cat_cols] = woe_encode(df_work[cat_cols], target_series, cols=cat_cols)[cat_cols]
+            except Exception:
+                df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s)[0])
+        else:
+            df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s)[0])
+        num_cols = num_cols + cat_cols
+        cat_cols = []
 
     # Escolha automática do método para variáveis numéricas
     numeric_method = method
