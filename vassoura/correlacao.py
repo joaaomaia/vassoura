@@ -110,6 +110,7 @@ def compute_corr_matrix(
     verbose: str | bool = "basic",
     verbose_types: bool | None = None,
     adaptive_sampling: bool = False,
+    cramer: bool = False,
 ) -> pd.DataFrame:
     """Calcula matriz de correlação.
 
@@ -132,6 +133,9 @@ def compute_corr_matrix(
         em datasets grandes.
     engine : {"pandas", "dask", "polars"}
         Backend a ser utilizado quando possível.
+    cramer : bool, default False
+        Quando ``True``, calcula também a matriz de Cramér‑V para variáveis
+        categóricas e a incorpora ao resultado.
 
     Returns
     -------
@@ -160,16 +164,26 @@ def compute_corr_matrix(
         verbose_types=verbose_types,
     )
 
-    # Escolha automática se necessário
+    # Escolha automática do método para variáveis numéricas
+    numeric_method = method
     if method == "auto":
-        method = suggest_corr_method(num_cols, cat_cols)
+        numeric_method = "pearson" if cat_cols == [] else "spearman"
+        if not num_cols and cat_cols:
+            numeric_method = "cramer"
         if verbose:
-            LOGGER.info("Método de correlação sugerido: %s", method)
+            LOGGER.info("Método de correlação sugerido: %s", numeric_method)
 
-    if method in ("pearson", "spearman"):
+    if numeric_method == "cramer" and not cramer:
+        if num_cols:
+            numeric_method = "spearman"
+        else:
+            raise ValueError("Cramér-V desabilitado e não há colunas numéricas")
+
+    cat_corr = None
+    if numeric_method in ("pearson", "spearman"):
         if not num_cols:
             raise ValueError(
-                "Não há colunas numéricas para calcular correlação %s" % method
+                "Não há colunas numéricas para calcular correlação %s" % numeric_method
             )
         data = df_work[num_cols].copy()
         if adaptive_sampling:
@@ -185,57 +199,68 @@ def compute_corr_matrix(
             except ImportError as exc:
                 raise ImportError("engine='dask' requer dask instalado") from exc
             data_dd = dd.from_pandas(data, npartitions=4)
-            if method == "pearson":
-                corr = data_dd.corr(method="pearson").compute()
+            if numeric_method == "pearson":
+                num_corr = data_dd.corr(method="pearson").compute()
             else:
                 LOGGER.info(
                     "Método %s não suportado por engine 'dask'; utilizando pandas.",
-                    method,
+                    numeric_method,
                 )
                 corr_engine = "pandas"
-                corr = data.corr(method=method)
+                num_corr = data.corr(method=numeric_method)
         elif engine == "polars":
             try:
                 import polars as pl
             except ImportError as exc:
                 raise ImportError("engine='polars' requer polars instalado") from exc
-            if method == "pearson":
-                corr = pl.from_pandas(data).corr().to_pandas()
+            if numeric_method == "pearson":
+                num_corr = pl.from_pandas(data).corr().to_pandas()
             else:
                 LOGGER.info(
                     "Método %s não suportado por engine 'polars'; utilizando pandas.",
-                    method,
+                    numeric_method,
                 )
                 corr_engine = "pandas"
-                corr = data.corr(method=method)
+                num_corr = data.corr(method=numeric_method)
         else:
-            corr = data.corr(method=method)
+            num_corr = data.corr(method=numeric_method)
         if verbose:
             LOGGER.info(
                 "Matriz de correlação %s calculada para %d variáveis numéricas (engine=%s)",
-                method,
+                numeric_method,
                 len(num_cols),
                 corr_engine,
             )
-        return corr
+    else:  # numeric_method == "cramer"
+        num_corr = pd.DataFrame()
+        if cramer and cat_cols:
+            numeric_method = "cramer"
 
-    if method == "cramer":
-        if not cat_cols:
-            raise ValueError("Não há colunas categóricas para calcular Cramér‑V")
-        data = df_work[cat_cols].copy()
+    if cramer and cat_cols:
+        data_cat = df_work[cat_cols].copy()
         if adaptive_sampling:
-            data = adaptive_sampling(
-                data,
+            data_cat = adaptive_sampling(
+                data_cat,
                 stratify_col=target_col,
                 date_cols=date_col,
             )
-        corr = _cramers_v_matrix(data)
+        cat_corr = _cramers_v_matrix(data_cat)
         if verbose:
             LOGGER.info(
-                "Matriz de correlação Cramér‑V calculada para %d "
-                "variáveis categóricas",
+                "Matriz de correlação Cramér‑V calculada para %d variáveis categóricas",
                 len(cat_cols),
             )
+
+    if not num_cols and cat_corr is not None:
+        return cat_corr
+
+    if num_cols:
+        cols = num_cols + (cat_cols if cat_corr is not None else [])
+        corr = pd.DataFrame(np.nan, index=cols, columns=cols)
+        corr.loc[num_cols, num_cols] = num_corr
+        if cat_corr is not None:
+            corr.loc[cat_cols, cat_cols] = cat_corr
+        np.fill_diagonal(corr.values, 1.0)
         return corr
 
     raise ValueError("Método inválido: %s" % method)

@@ -134,6 +134,7 @@ def generate_report(
     max_vif_iter: int = 20,
     n_steps: int | None = None,
     vif_n_steps: int = 1,
+    cramer: bool = False,
     heatmap_labels: bool = True,
     heatmap_base_size: float = 0.6,
     verbose: bool = True,
@@ -171,6 +172,9 @@ def generate_report(
         Passos fracionados para remoção por correlação.
     vif_n_steps : int
         Passos fracionados para remoção por VIF.
+    cramer : bool
+        Quando ``True`` calcula correlação Cramér‑V entre variáveis
+        categóricas e gera heatmap correspondente.
     heatmap_labels : bool
         Se True, exibe anotações numéricas (valores) no heatmap; caso False, anotações são omitidas.
     heatmap_base_size : float
@@ -300,7 +304,10 @@ def generate_report(
         )
         corr_before = manager_before.numeric_matrix(manager_before.dominant_numeric_method())
         corr_method_eff_num = manager_before.dominant_numeric_method()
-        corr_before_cat = manager_before.cat_matrix()
+        if cramer:
+            corr_before_cat = manager_before.cat_matrix()
+        else:
+            corr_before_cat = pd.DataFrame()
     else:
         corr_before_cat = pd.DataFrame()
         corr_method_eff_num = corr_method_eff
@@ -349,6 +356,7 @@ def generate_report(
             remove_ids=remove_ids,
             id_patterns=id_patterns,
             verbose=verbose,
+            cramer=False,
         )
 
     if vif_after is None:
@@ -381,7 +389,7 @@ def generate_report(
     img_corr_before = _fig_to_base64(fig_corr_before)
 
     img_corr_before_cat = ""
-    if not corr_before_cat.empty:
+    if cramer and not corr_before_cat.empty:
         fig_cat, ax_cat = plt.subplots(
             figsize=figsize_from_matrix(len(corr_before_cat), base=heatmap_base_size)
         )
@@ -609,7 +617,7 @@ def generate_report(
                 verbose=False,
             )
             corr_after_num = manager_after.numeric_matrix(manager_after.dominant_numeric_method())
-            corr_after_cat = manager_after.cat_matrix()
+            corr_after_cat = manager_after.cat_matrix() if cramer else pd.DataFrame()
             fig_corr_after_num, ax_can = plt.subplots(
                 figsize=figsize_from_matrix(len(corr_after_num), base=heatmap_base_size)
             )
@@ -623,7 +631,7 @@ def generate_report(
             )
             img_corr_after_num = _fig_to_base64(fig_corr_after_num)
             img_corr_after_cat = ""
-            if not corr_after_cat.empty:
+            if cramer and not corr_after_cat.empty:
                 fig_corr_after_cat, ax_cac = plt.subplots(
                     figsize=figsize_from_matrix(len(corr_after_cat), base=heatmap_base_size)
                 )
@@ -647,6 +655,7 @@ def generate_report(
                 <meta charset="utf-8">
                 <title>Relatório Vassoura</title>
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-7MUo45l42UuDGuDX6zF98MXcEEoJacV8LjKzNoh+piQTWDpKSqwdt5Pzz36E6BjLsnGB2XjBt2PTP4MLs5q0Wg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+                <!-- flare_palette -->
                 <style>
 /* Paleta suave inspirado em design systems financeiros */
 :root {{
