@@ -577,7 +577,6 @@ def generate_report(
                 *(id_cols or []),
                 *(date_cols or []),
                 *(ignore_cols or []),
-                "__noise_uniform__",
             ],
             errors="ignore",
         )

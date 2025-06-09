@@ -28,7 +28,7 @@ from .heuristics import (
     psi_stability,
 )
 from .relatorio import generate_report
-from .utils import parse_verbose
+from .utils import adaptive_sampling, parse_verbose
 from .vif import compute_vif
 
 # --------------------------------------------------------------------- #
@@ -545,7 +545,7 @@ class Vassoura:
         params = self.params.get("adaptive_sampling", {})
         if self.verbose:
             print("[Vassoura] Adaptive sampling process")
-        self._sample_df = maybe_sample(
+        self._sample_df = adaptive_sampling(
             self.df_current,
             max_cells=params.get("max_cells", 2_000_000),
             max_memory_mb=params.get("max_memory_mb", 50),

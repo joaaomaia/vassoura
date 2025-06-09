@@ -38,6 +38,7 @@ __all__ = [
     "figsize_from_matrix",
     "criar_dataset_pd_behavior",
     "woe_encode",
+    "adaptive_sampling",
 ]
 
 # ---------------------------------------------------------------------------
@@ -74,12 +75,12 @@ def parse_verbose(
 
 # def maybe_sample(df: pd.DataFrame, limit: int = 50000) -> pd.DataFrame:
 #     """Retorna amostra do DataFrame se ele exceder ``limit`` linhas."""
-
+#
 #     if len(df) > limit:
 #         return df.sample(n=limit, random_state=42)
 #     return df
 
-def maybe_sample(
+def adaptive_sampling(
     df: pd.DataFrame,
     max_cells: int | None = 2_000_000,      # ~ equivalente a 50 k linhas × 40 col.
     max_memory_mb: int | None = 50,
