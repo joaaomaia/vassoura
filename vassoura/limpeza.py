@@ -194,6 +194,7 @@ def clean(
                 verbose=verbose,
                 verbose_types=verbose_types,
                 adaptive_sampling=adaptive_sampling,
+                cramer=False,
             )
             upper_tri = corr_matrix.where(
                 np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
@@ -270,6 +271,7 @@ def clean(
             verbose=verbose,
             verbose_types=verbose_types,
             adaptive_sampling=adaptive_sampling,
+            cramer=False,
         )
     else:
         corr_matrix_final = pd.DataFrame()

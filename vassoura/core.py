@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 
 from .correlacao import compute_corr_matrix
-from .corr_manager import CorrelationManager
 from .heuristics import (
     drift_vs_target_leakage,
     graph_cut,
@@ -236,6 +235,7 @@ class Vassoura:
         self.params = {
             "target_leakage": 0.80,
             "corr": 0.9,
+            "cramer": False,
             "vif": 10.0,
             "iv": 0.02,
             "variance": 1e-4,
@@ -342,6 +342,7 @@ class Vassoura:
             verbose=self.verbose,
             adaptive_sampling=adaptive_flag,
             date_col=self.date_cols,
+            cramer=self.params.get("cramer", False),
         )
         if self._vif_df is None:
             try:
@@ -400,6 +401,7 @@ class Vassoura:
                 verbose=self.verbose,
                 adaptive_sampling=adaptive_flag,
                 date_col=self.date_cols,
+                cramer=self.params.get("cramer", False),
             )
 
         if self._corr_matrix_final is None:
@@ -420,6 +422,7 @@ class Vassoura:
                 verbose=self.verbose,
                 adaptive_sampling=adaptive_flag,
                 date_col=self.date_cols,
+                cramer=self.params.get("cramer", False),
             )
 
         if self._vif_df_before is None:
@@ -493,6 +496,7 @@ class Vassoura:
             corr_threshold=self.params.get("corr"),
             vif_threshold=self.params.get("vif"),
             verbose=self.verbose,
+            cramer=self.params.get("cramer", False),
             output_path=path,
             precomputed=precomputed,
             id_cols=self.id_cols,
@@ -576,14 +580,17 @@ class Vassoura:
         while True:
             df_work = self._df_for_analysis()
             if self._corr_matrix is None or iteration > 0:
-                manager = CorrelationManager(
+                self._corr_matrix = compute_corr_matrix(
                     df_work,
+                    method="auto",
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
+                    adaptive_sampling=self.adaptive_sampling,
+                    date_col=self.date_cols,
+                    cramer=self.params.get("cramer", False),
                 )
-                self._corr_matrix = manager.compute()
             upper_tri = self._corr_matrix.where(
                 np.triu(np.ones_like(self._corr_matrix, dtype=bool), k=1)
             )
