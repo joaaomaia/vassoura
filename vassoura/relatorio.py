@@ -384,6 +384,7 @@ def generate_report(
     img_corr_before = _fig_to_base64(fig_corr_before)
 
     img_corr_after = ""
+    corr_after_width = 40
 
     # 7) Plots de VIF antes e após limpeza em uma única figura
     vif_before_s = vif_before.set_index("variable")["vif"]
@@ -614,6 +615,16 @@ def generate_report(
                 highlight_labels=False,
             )
             img_corr_after = _fig_to_base64(fig_corr_after)
+            # Largura dinâmica baseada no número final de features
+            n_feat_after = len(corr_after)
+            if n_feat_after <= 15:
+                corr_after_width = 40
+            elif n_feat_after <= 30:
+                corr_after_width = 60
+            elif n_feat_after <= 60:
+                corr_after_width = 80
+            else:
+                corr_after_width = 100
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -847,7 +858,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain' style='width:100%;margin-bottom:10px'>"
             )
             if img_corr_after:
-                html += f"<img src='{img_corr_after}' alt='Heatmap pós-limpeza' style='width:100%'>"
+                html += (
+                    f"<img src='{img_corr_after}' alt='Heatmap pós-limpeza' "
+                    f"style='width:{corr_after_width}%'>"
+                )
             html += "</div>\n"
 
         html += "</body></html>\n"
