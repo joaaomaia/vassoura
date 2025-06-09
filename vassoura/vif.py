@@ -17,7 +17,10 @@ import numpy as np
 import pandas as pd
 from numpy.linalg import LinAlgError
 
-from .utils import adaptive_sampling, parse_verbose, search_dtypes, woe_encode
+# Evita shadow-name com o parâmetro booleano `adaptive_sampling`
+from .utils import adaptive_sampling as _adaptive_sampling
+from .utils import parse_verbose, search_dtypes, woe_encode
+
 
 try:
     from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -134,14 +137,51 @@ def compute_vif(
             if target_series.dropna().nunique() == 2 and set(target_series.dropna().unique()) != {0, 1}:
                 mapping = {val: i for i, val in enumerate(sorted(target_series.dropna().unique()))}
                 target_series = target_series.map(mapping)
-        if target_series is not None and target_series.dropna().nunique() == 2:
+
+
+        # if target_series is not None and target_series.dropna().nunique() == 2:
+        #     try:
+        #         tmp = df_work[cat_cols].fillna("__MISSING__")
+        #         df_work[cat_cols] = woe_encode(tmp, target_series, cols=cat_cols)[cat_cols]
+        #     except Exception:
+        #         df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
+        # else:
+        #     df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
+
+
+        # 1) WOE só faz sentido quando queremos explicabilidade.
+        #    Para detectar multicolinearidade preferimos um mapeamento
+        #    determinístico que preserve similaridade entre colunas.
+        use_woe = (
+            target_series is not None
+            and target_series.dropna().nunique() == 2
+            and target_series.dtype.kind in "biu"
+        )
+
+        if use_woe:
             try:
                 tmp = df_work[cat_cols].fillna("__MISSING__")
-                df_work[cat_cols] = woe_encode(tmp, target_series, cols=cat_cols)[cat_cols]
+                enc = (
+                    woe_encode(tmp, target_series, cols=cat_cols)[cat_cols]
+                    .replace([np.inf, -np.inf], 0)           # smoothing defensivo
+                    .astype(float)
+                )
+                df_work.loc[:, cat_cols] = enc
             except Exception:
-                df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
-        else:
-            df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
+                use_woe = False  # fallback para ordinal
+
+        if not use_woe:
+            # Ordinal encoding ordenado garante que 'A' → 0 em TODAS as colunas,
+            # preservando a correlação real entre variáveis categóricas.
+            df_work.loc[:, cat_cols] = (
+                df_work[cat_cols]
+                .apply(
+                    lambda s: pd.factorize(s.fillna("__MISSING__"), sort=True)[0]
+                )
+                .astype(float)
+            )
+
+
         num_cols = num_cols + cat_cols
 
     if not num_cols:
@@ -184,6 +224,7 @@ def compute_vif(
         # a saída dos testes; portanto suprimimos apenas nessa chamada.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             vif_vals = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
     else:  # fallback numpy puro
         vif_vals = _compute_vif_np(X)
