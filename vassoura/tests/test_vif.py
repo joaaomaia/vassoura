@@ -21,3 +21,15 @@ def test_vif_values_reasonable():
     df = _make_vif_data()
     result = compute_vif(df, target_col="target", verbose="none")
     assert result["vif"].max() > 5, "Esperado VIF alto por causa da correlação entre x1 e x2"
+
+
+def test_vif_with_categorical_and_nan():
+    df = pd.DataFrame(
+        {
+            "num1": [1, 2, 3, 4, 5, 6],
+            "cat1": ["a", "b", "a", None, "b", "c"],
+            "target": [0, 1, 0, 1, 0, 1],
+        }
+    )
+    result = compute_vif(df, target_col="target", limite_categorico=10, verbose="none")
+    assert set(result["variable"]) == {"num1", "cat1"}

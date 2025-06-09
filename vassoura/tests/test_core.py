@@ -78,8 +78,8 @@ def test_compute_corr_matrix():
 def test_compute_vif():
     df = _make_dummy_df()
     vif = vs.compute_vif(df, target_col="target", verbose="none")
-    # Deve existir uma linha por variável numérica
-    assert set(vif["variable"]) == {"x1", "x2", "x3"}
+    # Deve existir uma linha por variável analisada (numéricas + categóricas codificadas)
+    assert set(vif["variable"]) == {"x1", "x2", "x3", "cat"}
     # x1 ou x2 devem ter VIF alto devido à correlação
     assert vif["vif"].max() > 5
 
