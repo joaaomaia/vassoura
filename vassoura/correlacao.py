@@ -335,6 +335,7 @@ def plot_corr_heatmap(
     matplotlib.axes.Axes
         Objeto Axes contendo o *heat‑map*.
     """
+    corr = corr.fillna(0)
     n_feat = len(corr)
     figsize = figsize_from_matrix(
         n_feat, base=base_figsize, min_size=min_size, max_size=max_size
