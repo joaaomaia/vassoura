@@ -118,7 +118,7 @@ def importance(
     woe_cols: list[str] | None = None,
     keep_cols: list[str] | None = None,
 ) -> Dict[str, Any]:
-    """Calcula importâncias de features comparadas a uma shadow feature."""
+    """Calcula importâncias de features comparadas a uma uniform noise feature."""
 
     from sklearn.utils.class_weight import compute_sample_weight
     from sklearn.base import clone
@@ -222,7 +222,7 @@ def importance(
     y = y_full.iloc[idx]
     sw = sample_weight[idx] if sample_weight is not None else None
 
-    X["__shadow__"] = rng.random(len(X))
+    X["__noise_uniform__"] = rng.random(len(X))
 
     cat_cols = (
         woe_cols or X.select_dtypes(include=["object", "category"]).columns.tolist()
@@ -238,7 +238,7 @@ def importance(
     X_scaled = pd.DataFrame(scaler.transform(X), columns=X.columns)
 
     importances: Dict[str, pd.Series] = {}
-    shadow_values: Dict[str, float] = {}
+    noise_values: Dict[str, float] = {}
     models_without_weights: List[str] = []
     conv_info: Dict[str, bool] = {}
 
@@ -324,10 +324,10 @@ def importance(
             except Exception:
                 continue
 
-        shadow_val = float(imp.get("__shadow__", 0.0))
-        if "__shadow__" in imp:
-            imp = imp.drop("__shadow__")
-        shadow_values[name] = shadow_val
+        noise_val = float(imp.get("__noise_uniform__", 0.0))
+        if "__noise_uniform__" in imp:
+            imp = imp.drop("__noise_uniform__")
+        noise_values[name] = noise_val
         importances[name] = imp
         conv_info[f"{name}_converged"] = converged
         if not converged:
@@ -351,7 +351,7 @@ def importance(
             continue
         keep = False
         for model_name, val in imp_df.loc[feat].items():
-            if val > shadow_values.get(model_name, 0.0):
+            if val > noise_values.get(model_name, 0.0):
                 keep = True
                 break
         if keep:
