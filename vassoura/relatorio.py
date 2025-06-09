@@ -291,9 +291,9 @@ def generate_report(
         df_corr_source = df.copy()
         if target_col and target_col in df_corr_source:
             df_corr_source = df_corr_source.drop(columns=[target_col])
-        manager_before = CorrelationManager(
+        corr_before = compute_corr_matrix(
             df_corr_source,
-            method="auto",
+            method="spearman",
             target_col=None,
             include_target=False,
             limite_categorico=limite_categorico,
@@ -301,16 +301,11 @@ def generate_report(
             remove_ids=remove_ids,
             id_patterns=id_patterns,
             verbose=verbose,
+            cramer=False,
         )
-        corr_before = manager_before.numeric_matrix(manager_before.dominant_numeric_method())
-        corr_method_eff_num = manager_before.dominant_numeric_method()
-        if cramer:
-            corr_before_cat = manager_before.cat_matrix()
-        else:
-            corr_before_cat = pd.DataFrame()
+        corr_method_eff_num = "spearman"
     else:
-        corr_before_cat = pd.DataFrame()
-        corr_method_eff_num = corr_method_eff
+        corr_method_eff_num = "spearman"
 
     # 4) Cálculo de VIF ANTES da limpeza (nunca inclui target)
     if vif_before is None:
@@ -388,23 +383,7 @@ def generate_report(
     )
     img_corr_before = _fig_to_base64(fig_corr_before)
 
-    img_corr_before_cat = ""
-    if cramer and not corr_before_cat.empty:
-        fig_cat, ax_cat = plt.subplots(
-            figsize=figsize_from_matrix(len(corr_before_cat), base=heatmap_base_size)
-        )
-        plot_corr_heatmap(
-            corr_before_cat,
-            title="Cram\xe9r's V (Categ\xf3ricas)",
-            ax=ax_cat,
-            annot=False,
-            fmt=".2f",
-            highlight_labels=False,
-        )
-        img_corr_before_cat = _fig_to_base64(fig_cat)
-
-    img_corr_after_num = ""
-    img_corr_after_cat = ""
+    img_corr_after = ""
 
     # 7) Plots de VIF antes e após limpeza em uma única figura
     vif_before_s = vif_before.set_index("variable")["vif"]
@@ -611,39 +590,30 @@ def generate_report(
             errors="ignore",
         )
         if not df_hm.empty:
-            manager_after = CorrelationManager(
+            corr_after = compute_corr_matrix(
                 df_hm,
-                method="auto",
+                method="spearman",
+                target_col=None,
+                include_target=False,
+                limite_categorico=limite_categorico,
+                force_categorical=force_categorical,
+                remove_ids=False,
+                id_patterns=None,
                 verbose=False,
+                cramer=False,
             )
-            corr_after_num = manager_after.numeric_matrix(manager_after.dominant_numeric_method())
-            corr_after_cat = manager_after.cat_matrix() if cramer else pd.DataFrame()
-            fig_corr_after_num, ax_can = plt.subplots(
-                figsize=figsize_from_matrix(len(corr_after_num), base=heatmap_base_size)
+            fig_corr_after, ax_can = plt.subplots(
+                figsize=figsize_from_matrix(len(corr_after), base=heatmap_base_size)
             )
             plot_corr_heatmap(
-                corr_after_num,
-                title=f"Numéricas ({manager_after.dominant_numeric_method().capitalize()})",
+                corr_after,
+                title="Correlação pós-limpeza (Spearman)",
                 ax=ax_can,
                 annot=False,
                 fmt=".2f",
                 highlight_labels=False,
             )
-            img_corr_after_num = _fig_to_base64(fig_corr_after_num)
-            img_corr_after_cat = ""
-            if cramer and not corr_after_cat.empty:
-                fig_corr_after_cat, ax_cac = plt.subplots(
-                    figsize=figsize_from_matrix(len(corr_after_cat), base=heatmap_base_size)
-                )
-                plot_corr_heatmap(
-                    corr_after_cat,
-                    title="Cram\xe9r's V",
-                    ax=ax_cac,
-                    annot=False,
-                    fmt=".2f",
-                    highlight_labels=False,
-                )
-                img_corr_after_cat = _fig_to_base64(fig_corr_after_cat)
+            img_corr_after = _fig_to_base64(fig_corr_after)
 
     # 8) Montagem do relatório HTML
     if style == "html":
@@ -770,20 +740,10 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
             f"""
             <div class="section" id="heatmaps">
                 <h2>Heatmaps de Correlação</h2>
-                <div style='display:flex;gap:20px'>
-                    <div style='flex:1'>
-                        <h3>Numéricas ({corr_method_eff_num.capitalize()})</h3>
-                        <img src="{img_corr_before}" alt="corr_num">
-                    </div>
-                    <div style='flex:1'>
-                        <h3>Categóricas (Cram\xe9r's V)</h3>
-                        <img src="{img_corr_before_cat}" alt="corr_cat">
-                    </div>
-                </div>
+                <img src="{img_corr_before}" alt="heatmap" style="max-width:100%">
                 <p style='margin-top:8px;font-size:0.9rem'>
-                Numéricas: Pearson ou Spearman conforme detecção de normalidade.\
-                Ordinais usam Spearman. Binária×Numérica usa Point-Biserial.\
-                Categóricas usam Cram\xe9r's V ou Qui-quadrado.</p>
+                Heatmap consolidado utilizando coeficiente de Spearman.\
+                Variáveis categóricas foram codificadas via WoE apenas para esta visualização.</p>
             </div>
             """
         )
@@ -886,12 +846,9 @@ img{{border:1px solid #e1e6eb;border-radius:var(--radius);}}
                 "<p>Inclui-se a variável aleatória <code>__noise_uniform__</code> como referência.</p>"
                 f"<img src='{img_noise_uniform_triplet}' alt='SHAP · KS · LightGBM Gain' style='width:100%;margin-bottom:10px'>"
             )
-            html += "<div style='display:flex;gap:20px'>"
-            if img_corr_after_num:
-                html += f"<img src='{img_corr_after_num}' alt='Corr Num' style='flex:1'>"
-            if img_corr_after_cat:
-                html += f"<img src='{img_corr_after_cat}' alt='Corr Cat' style='flex:1'>"
-            html += "</div></div>\n"
+            if img_corr_after:
+                html += f"<img src='{img_corr_after}' alt='Heatmap pós-limpeza' style='width:100%'>"
+            html += "</div>\n"
 
         html += "</body></html>\n"
         output_path.write_bytes(html.encode("utf-8", errors="ignore"))
