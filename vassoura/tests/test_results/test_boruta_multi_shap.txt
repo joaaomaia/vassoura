@@ -16,15 +16,8 @@ vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_basic
 vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_respects_scaled_flag
 vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_class_imbalance
 vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_vassoura_integration
-  C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\site-packages\shap\explainers\_linear.py:99: FutureWarning: The feature_perturbation option is now deprecated in favor of using the appropriate masker (maskers.Independent, maskers.Partition or maskers.Impute).
-    warnings.warn(wmsg, FutureWarning)
-
-vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_basic
-vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_respects_scaled_flag
-vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_class_imbalance
-vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_vassoura_integration
   C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\site-packages\shap\explainers\_tree.py:583: UserWarning: LightGBM binary classifier with TreeExplainer shap values output has changed to a list of ndarray
     warnings.warn(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 4 passed, 8 warnings in 3.56s ========================
+======================== 4 passed, 4 warnings in 3.75s ========================

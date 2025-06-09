@@ -18,4 +18,3 @@ pytest -vv --tb=long vassoura/tests/test_boruta_multi_shap.py                   
 pytest -vv --tb=long vassoura/tests/test_vassoura_integration_super.py           > vassoura/tests/test_results/test_vassoura_integration_super.txt
 pytest -vv --tb=long vassoura/tests/test_vif.py                                  > vassoura/tests/test_results/test_vif.txt
 
-

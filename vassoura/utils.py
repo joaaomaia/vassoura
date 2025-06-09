@@ -72,13 +72,77 @@ def parse_verbose(
     verbose_flag = level != "none"
     return verbose_flag, verbose_types
 
+# def maybe_sample(df: pd.DataFrame, limit: int = 50000) -> pd.DataFrame:
+#     """Retorna amostra do DataFrame se ele exceder ``limit`` linhas."""
 
-def maybe_sample(df: pd.DataFrame, limit: int = 50000) -> pd.DataFrame:
-    """Retorna amostra do DataFrame se ele exceder ``limit`` linhas."""
+#     if len(df) > limit:
+#         return df.sample(n=limit, random_state=42)
+#     return df
 
-    if len(df) > limit:
-        return df.sample(n=limit, random_state=42)
-    return df
+def maybe_sample(
+    df: pd.DataFrame,
+    max_cells: int | None = 2_000_000,      # ~ equivalente a 50 k linhas × 40 col.
+    max_memory_mb: int | None = 50,
+    stratify_col: str | None = None,
+    random_state: int | None = 42,
+) -> pd.DataFrame:
+    """
+    Retorna uma amostra do DataFrame dimensionada pelo “volume” de dados,
+    considerando tanto (linhas × colunas) quanto memória estimada.
+
+    Parâmetros
+    ----------
+    df : pd.DataFrame
+        DataFrame de entrada.
+    max_cells : int, opcional
+        Número máximo de células (linhas × colunas) desejado. 
+        Se None, ignora esta restrição.
+    max_memory_mb : int, opcional
+        Memória máxima desejada em megabytes. Estimada via
+        `df.memory_usage(deep=True).sum()`. Se None, ignora esta restrição.
+    stratify_col : str, opcional
+        Nome da coluna usada para amostragem estratificada. Se None,
+        faz amostragem simples.
+    random_state : int, opcional
+        Semente do gerador de números aleatórios.
+
+    Retorna
+    -------
+    pd.DataFrame
+        DataFrame amostrado (ou o original se já estiver dentro dos limites).
+    """
+    n_rows, n_cols = df.shape
+
+    # 1. Verifica restrição de células
+    target_rows_cells = n_rows
+    if max_cells is not None and n_rows * n_cols > max_cells:
+        target_rows_cells = int(max_cells / n_cols)
+
+    # 2. Verifica restrição de memória
+    target_rows_mem = n_rows
+    if max_memory_mb is not None:
+        bytes_per_row = df.memory_usage(deep=True).sum() / n_rows
+        target_rows_mem = int((max_memory_mb * 1024**2) / bytes_per_row)
+
+    # 3. Escolhe o menor entre as duas restrições
+    target_rows = min(target_rows_cells, target_rows_mem, n_rows)
+
+    # Se já está dentro dos limites, devolve o original
+    if target_rows >= n_rows:
+        return df
+
+    # 4. Amostragem (estratificada se possível)
+    if stratify_col is not None and stratify_col in df.columns:
+        # Proporção de cada classe
+        frac = target_rows / n_rows
+        return (
+            df.groupby(stratify_col, group_keys=False)
+              .apply(lambda x: x.sample(frac=frac, random_state=random_state))
+              .reset_index(drop=True)
+        )
+    else:
+        print(f"[ADAPTIVE SAMPLING]: {target_rows} rows used.")
+        return df.sample(n=target_rows, random_state=random_state).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------

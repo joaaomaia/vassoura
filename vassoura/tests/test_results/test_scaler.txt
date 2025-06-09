@@ -59,4 +59,4 @@ vassoura/tests/test_scaler.py::test_plot_histograms_runs[500]
     warnings.warn(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================= 43 passed, 4 warnings in 4.04s ========================
+======================= 43 passed, 4 warnings in 3.88s ========================

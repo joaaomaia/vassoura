@@ -51,6 +51,7 @@ bin/
 #vassoura_report.html
 *.svg
 *.pdf
+*.html
 
 # Ignora todos os arquivos .png
 *.png
@@ -59,7 +60,6 @@ bin/
 
 # Exceto o banner específico
 !vassoura/imgs/social_preview_github.png
-
 
 # Dados temporários
 *.log
