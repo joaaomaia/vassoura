@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from numpy.linalg import LinAlgError
 
-from .utils import adaptive_sampling, parse_verbose, search_dtypes
+from .utils import adaptive_sampling, parse_verbose, search_dtypes, woe_encode
 
 try:
     from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -115,7 +115,7 @@ def compute_vif(
         df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
     )
 
-    num_cols, _ = search_dtypes(
+    num_cols, cat_cols = search_dtypes(
         df_work,
         target_col=None,
         limite_categorico=limite_categorico,
@@ -126,6 +126,23 @@ def compute_vif(
         verbose=verbose,
         verbose_types=verbose_types,
     )
+
+    if cat_cols:
+        target_series = None
+        if target_col and target_col in df.columns:
+            target_series = df[target_col]
+            if target_series.dropna().nunique() == 2 and set(target_series.dropna().unique()) != {0, 1}:
+                mapping = {val: i for i, val in enumerate(sorted(target_series.dropna().unique()))}
+                target_series = target_series.map(mapping)
+        if target_series is not None and target_series.dropna().nunique() == 2:
+            try:
+                tmp = df_work[cat_cols].fillna("__MISSING__")
+                df_work[cat_cols] = woe_encode(tmp, target_series, cols=cat_cols)[cat_cols]
+            except Exception:
+                df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
+        else:
+            df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
+        num_cols = num_cols + cat_cols
 
     if not num_cols:
         raise ValueError("Nenhuma coluna numérica identificada para cálculo de VIF")
