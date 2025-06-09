@@ -226,6 +226,8 @@ class Vassoura:
         self.vif_n_steps = vif_n_steps
 
         self.process = process if process is not None else DEFAULT_PROCESS.copy()
+        if self.adaptive_sampling and "adaptive_sampling" not in self.process:
+            self.process.insert(0, "adaptive_sampling")
         self.heuristics = (
             DEFAULT_HEURISTICS.copy() if heuristics is None else heuristics
         )
@@ -272,10 +274,12 @@ class Vassoura:
         self._scaler = None
         self._scaled_cols: List[str] = []
         self._df_scaled: Optional[pd.DataFrame] = None
+        self._sample_df: Optional[pd.DataFrame] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
 
         # Map processos e heurísticas → métodos
         self._process_funcs: Dict[str, Callable[[], None]] = {
+            "adaptive_sampling": self._apply_adaptive_sampling,
             "missing": self._apply_missing,
             "variance": self._apply_variance,
             "scaler": self._apply_scaler,
@@ -327,6 +331,7 @@ class Vassoura:
             self.df_current = self.df_original[cols_keep].copy()
         # Armazena correlação e VIF finais para relatórios
         df_analysis = self._df_for_analysis()
+        adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
         self._corr_matrix_final = compute_corr_matrix(
             df_analysis,
             method="auto",
@@ -334,7 +339,8 @@ class Vassoura:
             include_target=False,
             engine=self.engine,
             verbose=self.verbose,
-            adaptive_sampling=self.adaptive_sampling,
+            adaptive_sampling=adaptive_flag,
+            date_col=self.date_cols,
         )
         if self._vif_df is None:
             try:
@@ -344,7 +350,8 @@ class Vassoura:
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
-                    adaptive_sampling=self.adaptive_sampling,
+                    adaptive_sampling=adaptive_flag,
+                    date_col=self.date_cols,
                 )
             except Exception:
                 self._vif_df = None
@@ -382,6 +389,7 @@ class Vassoura:
                 ),
                 errors="ignore",
             )
+            adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
             self._corr_matrix = compute_corr_matrix(
                 base,
                 method="auto",
@@ -389,7 +397,8 @@ class Vassoura:
                 include_target=False,
                 engine=self.engine,
                 verbose=self.verbose,
-                adaptive_sampling=self.adaptive_sampling,
+                adaptive_sampling=adaptive_flag,
+                date_col=self.date_cols,
             )
 
         if self._corr_matrix_final is None:
@@ -400,6 +409,7 @@ class Vassoura:
                 ),
                 errors="ignore",
             )
+            adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
             self._corr_matrix_final = compute_corr_matrix(
                 df_final,
                 method="auto",
@@ -407,7 +417,8 @@ class Vassoura:
                 include_target=False,
                 engine=self.engine,
                 verbose=self.verbose,
-                adaptive_sampling=self.adaptive_sampling,
+                adaptive_sampling=adaptive_flag,
+                date_col=self.date_cols,
             )
 
         if self._vif_df_before is None:
@@ -418,13 +429,15 @@ class Vassoura:
                     ),
                     errors="ignore",
                 )
+                adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
                 self._vif_df_before = compute_vif(
                     df_before,
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
-                    adaptive_sampling=self.adaptive_sampling,
+                    adaptive_sampling=adaptive_flag,
+                    date_col=self.date_cols,
                 )
             except Exception:
                 self._vif_df_before = None
@@ -437,13 +450,15 @@ class Vassoura:
                     ),
                     errors="ignore",
                 )
+                adaptive_flag = False if self._sample_df is not None else self.adaptive_sampling
                 self._vif_df = compute_vif(
                     df_final,
                     target_col=self.target_col,
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
-                    adaptive_sampling=self.adaptive_sampling,
+                    adaptive_sampling=adaptive_flag,
+                    date_col=self.date_cols,
                 )
             except Exception:
                 self._vif_df = None
@@ -520,11 +535,24 @@ class Vassoura:
         self._scaler = None
         self._scaled_cols = []
         self._df_scaled = None
+        self._sample_df = None
         self._history.clear()
 
     # ------------------------------------------------------------------ #
     # Heurísticas                                                        #
     # ------------------------------------------------------------------ #
+    def _apply_adaptive_sampling(self) -> None:
+        params = self.params.get("adaptive_sampling", {})
+        if self.verbose:
+            print("[Vassoura] Adaptive sampling process")
+        self._sample_df = maybe_sample(
+            self.df_current,
+            max_cells=params.get("max_cells", 2_000_000),
+            max_memory_mb=params.get("max_memory_mb", 50),
+            stratify_col=self.target_col,
+            date_cols=self.date_cols,
+        )
+
     def _apply_missing(self) -> None:
         thr = self.params.get("missing")
         if thr is None:
@@ -932,9 +960,10 @@ class Vassoura:
         return a if med_a >= med_b else b
 
     def _df_for_analysis(self) -> pd.DataFrame:
-        """DataFrame excluindo IDs, datas e colunas ignoradas."""
+        """DataFrame para análise (amostra se disponível)."""
+        base = self._sample_df if self._sample_df is not None else self.df_current
         exclude = set(self.id_cols) | set(self.date_cols) | set(self.ignore_cols)
-        return self.df_current.drop(columns=list(exclude), errors="ignore")
+        return base.drop(columns=list(exclude), errors="ignore")
 
     def _drop(
         self, cols: List[str], reason: str, values: Optional[List[float]] = None

@@ -84,6 +84,7 @@ def maybe_sample(
     max_cells: int | None = 2_000_000,      # ~ equivalente a 50 k linhas × 40 col.
     max_memory_mb: int | None = 50,
     stratify_col: str | None = None,
+    date_cols: list[str] | None = None,
     random_state: int | None = 42,
 ) -> pd.DataFrame:
     """
@@ -101,8 +102,11 @@ def maybe_sample(
         Memória máxima desejada em megabytes. Estimada via
         `df.memory_usage(deep=True).sum()`. Se None, ignora esta restrição.
     stratify_col : str, opcional
-        Nome da coluna usada para amostragem estratificada. Se None,
+        Nome da coluna usada para amostragem estratificada. Se ``None``,
         faz amostragem simples.
+    date_cols : list[str] | None
+        Colunas de data utilizadas para ordenar o resultado e preservar a
+        sequência temporal.
     random_state : int, opcional
         Semente do gerador de números aleatórios.
 
@@ -133,16 +137,21 @@ def maybe_sample(
 
     # 4. Amostragem (estratificada se possível)
     if stratify_col is not None and stratify_col in df.columns:
-        # Proporção de cada classe
         frac = target_rows / n_rows
-        return (
+        sampled = (
             df.groupby(stratify_col, group_keys=False)
-              .apply(lambda x: x.sample(frac=frac, random_state=random_state))
-              .reset_index(drop=True)
+            .apply(lambda x: x.sample(frac=frac, random_state=random_state))
         )
     else:
-        print(f"[ADAPTIVE SAMPLING]: {target_rows} rows used.")
-        return df.sample(n=target_rows, random_state=random_state).reset_index(drop=True)
+        sampled = df.sample(n=target_rows, random_state=random_state)
+
+    if date_cols:
+        valid_dates = [c for c in date_cols if c in sampled.columns]
+        if valid_dates:
+            sampled = sampled.sort_values(valid_dates)
+
+    print(f"[ADAPTIVE SAMPLING]: {len(sampled)} rows used.")
+    return sampled.reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
