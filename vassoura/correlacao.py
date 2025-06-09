@@ -102,7 +102,6 @@ def compute_corr_matrix(
     method: str = "auto",
     target_col: str | None = None,
     include_target: bool = False,
-    engine: str = "pandas",
     limite_categorico: int = 50,
     force_categorical: Optional[List[str]] = None,
     remove_ids: bool = False,
@@ -110,6 +109,7 @@ def compute_corr_matrix(
     date_col: Optional[List[str]] = None,
     verbose: str | bool = "basic",
     verbose_types: bool | None = None,
+    engine: str = "pandas",
     adaptive_sampling: bool = False,
     cramer: bool = False,
 ) -> pd.DataFrame:
@@ -119,8 +119,9 @@ def compute_corr_matrix(
     ----------
     df : pandas.DataFrame
         *DataFrame* completo.
-    method : {"auto", "pearson", "spearman", "cramer"}
-        Método de correlação. ``auto`` escolhe com base nas colunas.
+    method : {"auto", "pearson", "spearman"}
+        Método de correlação. ``auto`` escolhe ``pearson`` quando não há
+        categóricas e ``spearman`` caso contrário.
     target_col : str | None
         Nome da coluna *target*. Será removida a não ser que
         ``include_target`` seja ``True``.
@@ -129,14 +130,9 @@ def compute_corr_matrix(
     limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
     verbose, verbose_types
         Encaminhados para ``search_dtypes``.
-    adaptive_sampling : bool
-        Se ``True``, usa amostra de até 50k linhas para acelerar o cálculo
-        em datasets grandes.
-    engine : {"pandas", "dask", "polars"}
-        Backend a ser utilizado quando possível.
-    cramer : bool, default False
-        Quando ``True``, calcula também a matriz de Cramér‑V para variáveis
-        categóricas e a incorpora ao resultado.
+    engine, adaptive_sampling, cramer
+        Parâmetros mantidos apenas para compatibilidade. Atualmente não
+        alteram o comportamento.
 
     Returns
     -------
@@ -146,16 +142,12 @@ def compute_corr_matrix(
     # Configura verbosidade
     verbose, verbose_types = parse_verbose(verbose, verbose_types)
 
-    # Filtra colunas segundo parâmetros
     drop_target = target_col and not include_target
-    df_work = (
-        df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
-    )
+    df_work = df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
 
-    # Identifica tipos
     num_cols, cat_cols = search_dtypes(
         df_work,
-        target_col=None,  # já removido se for o caso
+        target_col=None,
         limite_categorico=limite_categorico,
         force_categorical=force_categorical,
         remove_ids=remove_ids,
@@ -165,10 +157,15 @@ def compute_corr_matrix(
         verbose_types=verbose_types,
     )
 
-    # ------------------------------------------------------------------
-    # WoE fallback for categorical features when Cramér is disabled
-    # ------------------------------------------------------------------
-    if not cramer and cat_cols:
+    if method == "auto":
+        numeric_method = "pearson" if not cat_cols else "spearman"
+    else:
+        numeric_method = method
+
+    if numeric_method not in {"pearson", "spearman"}:
+        raise ValueError("method must be 'pearson', 'spearman' or 'auto'")
+
+    if cat_cols:
         target_series = None
         if target_col and target_col in df.columns:
             target_series = df[target_col]
@@ -183,120 +180,25 @@ def compute_corr_matrix(
         else:
             df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s)[0])
         num_cols = num_cols + cat_cols
-        cat_cols = []
 
-    # ------------------------------------------------------------------
-    # Remove colunas constantes que inviabilizam a correlação
-    # ------------------------------------------------------------------
-    cols_check = num_cols + cat_cols
-    const_cols = [c for c in cols_check if df_work[c].nunique(dropna=False) <= 1]
+    const_cols = [c for c in num_cols if df_work[c].nunique(dropna=False) <= 1]
     if const_cols:
         if verbose:
             LOGGER.info("Ignorando colunas constantes na correlação: %s", const_cols)
         df_work = df_work.drop(columns=const_cols)
         num_cols = [c for c in num_cols if c not in const_cols]
-        cat_cols = [c for c in cat_cols if c not in const_cols]
 
-    # Escolha automática do método para variáveis numéricas
-    numeric_method = method
-    if method == "auto":
-        numeric_method = "pearson" if cat_cols == [] else "spearman"
-        if not num_cols and cat_cols:
-            numeric_method = "cramer"
-        if verbose:
-            LOGGER.info("Método de correlação sugerido: %s", numeric_method)
+    if not num_cols:
+        return pd.DataFrame()
 
-    if numeric_method == "cramer" and not cramer:
-        if num_cols:
-            numeric_method = "spearman"
-        else:
-            raise ValueError("Cramér-V desabilitado e não há colunas numéricas")
-
-    cat_corr = None
-    if numeric_method in ("pearson", "spearman"):
-        if not num_cols:
-            raise ValueError(
-                "Não há colunas numéricas para calcular correlação %s" % numeric_method
-            )
-        data = df_work[num_cols].copy()
-        if adaptive_sampling:
-            data = adaptive_sampling(
-                data,
-                stratify_col=target_col,
-                date_cols=date_col,
-            )
-        corr_engine = engine
-        if engine == "dask":
-            try:
-                import dask.dataframe as dd
-            except ImportError as exc:
-                raise ImportError("engine='dask' requer dask instalado") from exc
-            data_dd = dd.from_pandas(data, npartitions=4)
-            if numeric_method == "pearson":
-                num_corr = data_dd.corr(method="pearson").compute()
-            else:
-                LOGGER.info(
-                    "Método %s não suportado por engine 'dask'; utilizando pandas.",
-                    numeric_method,
-                )
-                corr_engine = "pandas"
-                num_corr = data.corr(method=numeric_method)
-        elif engine == "polars":
-            try:
-                import polars as pl
-            except ImportError as exc:
-                raise ImportError("engine='polars' requer polars instalado") from exc
-            if numeric_method == "pearson":
-                num_corr = pl.from_pandas(data).corr().to_pandas()
-            else:
-                LOGGER.info(
-                    "Método %s não suportado por engine 'polars'; utilizando pandas.",
-                    numeric_method,
-                )
-                corr_engine = "pandas"
-                num_corr = data.corr(method=numeric_method)
-        else:
-            num_corr = data.corr(method=numeric_method)
-        if verbose:
-            LOGGER.info(
-                "Matriz de correlação %s calculada para %d variáveis numéricas (engine=%s)",
-                numeric_method,
-                len(num_cols),
-                corr_engine,
-            )
-    else:  # numeric_method == "cramer"
-        num_corr = pd.DataFrame()
-        if cramer and cat_cols:
-            numeric_method = "cramer"
-
-    if cramer and cat_cols:
-        data_cat = df_work[cat_cols].copy()
-        if adaptive_sampling:
-            data_cat = adaptive_sampling(
-                data_cat,
-                stratify_col=target_col,
-                date_cols=date_col,
-            )
-        cat_corr = _cramers_v_matrix(data_cat)
-        if verbose:
-            LOGGER.info(
-                "Matriz de correlação Cramér‑V calculada para %d variáveis categóricas",
-                len(cat_cols),
-            )
-
-    if not num_cols and cat_corr is not None:
-        return cat_corr
-
-    if num_cols:
-        cols = num_cols + (cat_cols if cat_corr is not None else [])
-        corr = pd.DataFrame(np.nan, index=cols, columns=cols)
-        corr.loc[num_cols, num_cols] = num_corr
-        if cat_corr is not None:
-            corr.loc[cat_cols, cat_cols] = cat_corr
-        np.fill_diagonal(corr.values, 1.0)
-        return corr
-
-    raise ValueError("Método inválido: %s" % method)
+    corr = df_work[num_cols].corr(method=numeric_method)
+    if verbose:
+        LOGGER.info(
+            "Matriz de correlação %s calculada para %d variáveis",
+            numeric_method,
+            len(num_cols),
+        )
+    return corr
 
 
 # ---------------------------------------------------------------------------
