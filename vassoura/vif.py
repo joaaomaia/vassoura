@@ -133,6 +133,15 @@ def compute_vif(
         .dropna()
     )
 
+    if data.empty:
+        warnings.warn(
+            "Nenhuma linha válida disponível para VIF; retornando NaN",
+            RuntimeWarning,
+        )
+        return pd.DataFrame(
+            {"variable": num_cols, "vif": [np.nan for _ in num_cols]}
+        )
+
     if adaptive_sampling:
         data = _adaptive_sampling(data, stratify_col=target_col, date_cols=date_col)
 
