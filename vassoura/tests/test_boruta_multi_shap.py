@@ -54,3 +54,14 @@ def test_boruta_multi_shap_vassoura_integration():
     out = vs.run()
     assert out.shape[1] <= df.shape[1]
     assert any(step["reason"] == "boruta_multi_shap" for step in vs.history)
+
+
+def test_boruta_multi_shap_fast_mode():
+    rng = np.random.default_rng(4)
+    df = pd.DataFrame({
+        "x1": rng.normal(size=80),
+        "x_noise": rng.normal(size=80),
+        "target": (rng.normal(size=80) > 0).astype(int),
+    })
+    result = boruta_multi_shap(df, "target", fast_mode=True, random_state=4)
+    assert "timings" in result["artefacts"]
