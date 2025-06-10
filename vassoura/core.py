@@ -1034,6 +1034,8 @@ class Vassoura:
         if not cols:
             return
         self.df_current.drop(columns=cols, errors="ignore", inplace=True)
+        if self._sample_df is not None:
+            self._sample_df.drop(columns=cols, errors="ignore", inplace=True)
         entry = {"cols": cols, "reason": reason}
         if values is not None:
             entry["values"] = values
