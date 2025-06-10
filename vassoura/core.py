@@ -687,8 +687,20 @@ class Vassoura:
         num_cols = df_work.select_dtypes(include=[np.number]).columns.tolist()
         if self.target_col in num_cols:
             num_cols.remove(self.target_col)
-        # Se tiver ≤1 coluna numérica, não faz sentido calcular VIF
+
+        # Quando não houver colunas numéricas suficientes, tentar WOE nas categóricas
+        use_woe = False
         if len(num_cols) <= 1:
+            cat_cols = [
+                c
+                for c in df_work.columns
+                if c not in num_cols and c != self.target_col
+            ]
+            if self.target_col and cat_cols:
+                tgt = self.df_current[self.target_col]
+                if tgt.nunique(dropna=False) == 2:
+                    use_woe = True
+        if len(num_cols) <= 1 and not use_woe:
             if self.verbose:
                 print(
                     f"[Vassoura] Pulando VIF (col numéricas insuficientes: {len(num_cols)})"
@@ -696,6 +708,8 @@ class Vassoura:
             return
         if self.verbose:
             msg = f"[Vassoura] VIF heuristic (thr={thr})"
+            if use_woe:
+                msg += " [WOE]"
             if self.vif_n_steps != 1:
                 msg += f" vif_n_steps={self.vif_n_steps}"
             print(msg)
@@ -708,6 +722,7 @@ class Vassoura:
                     include_target=False,
                     engine=self.engine,
                     verbose=self.verbose,
+                    use_woe=use_woe,
                 )
                 if self._vif_df_before is None:
                     self._vif_df_before = self._vif_df.copy()

@@ -163,3 +163,24 @@ def test_iv_skipped_when_target_not_binary(capsys):
     assert "Skipping IV heuristic" in captured.out
     # Nenhuma coluna removida
     assert result.equals(df)
+
+
+def test_vif_with_only_categorical_uses_woe(capsys):
+    df = pd.DataFrame({
+        "cat1": ["A", "B", "A", "B"],
+        "cat2": ["X", "Y", "X", "X"],
+        "target": [1, 0, 1, 0],
+    })
+    vsess = vs.Vassoura(
+        df,
+        target_col="target",
+        heuristics=["vif"],
+        verbose=True,
+    )
+    vsess.run()
+    captured = capsys.readouterr()
+    assert "VIF heuristic" in captured.out
+    assert "WOE" in captured.out
+    assert vsess._vif_df is not None
+    assert not vsess._vif_df.empty
+
