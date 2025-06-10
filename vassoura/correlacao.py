@@ -145,6 +145,11 @@ def compute_corr_matrix(
     drop_target = target_col and not include_target
     df_work = df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
 
+    if df_work.empty:
+        if verbose:
+            LOGGER.info("Matriz de correlação ignorada (DataFrame vazio)")
+        return pd.DataFrame()
+
     num_cols, cat_cols = search_dtypes(
         df_work,
         target_col=None,
