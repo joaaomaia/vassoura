@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -29,6 +30,7 @@ from .heuristics import (
 )
 from .relatorio import generate_report
 from .utils import adaptive_sampling, parse_verbose
+from .timeout import TimeoutExecutor
 from .vif import compute_vif
 
 # --------------------------------------------------------------------- #
@@ -198,6 +200,8 @@ class Vassoura:
         date_cols: Optional[List[str]] = None,
         ignore_cols: Optional[List[str]] = None,
         drop_ignored: bool = True,
+        timeout_map: Optional[Dict[str, float]] = None,
+        max_total_runtime: Optional[float] = None,
     ) -> None:
         self.df_original = df.copy()
         self.df_current = df.copy()
@@ -253,6 +257,9 @@ class Vassoura:
         if params:
             self.params.update(params)
         self.sample_weight = sample_weight
+        self.timeout_map = timeout_map or {}
+        self.max_total_runtime = max_total_runtime
+        self._exec_log: List[Dict[str, Any]] = []
 
         # Caches internos
         self._corr_matrix: Optional[pd.DataFrame] = None
@@ -277,7 +284,7 @@ class Vassoura:
         self._df_scaled: Optional[pd.DataFrame] = None
         self._sample_df: Optional[pd.DataFrame] = None
         self._history: List[Dict[str, Any]] = []  # cada entrada = {'cols', 'reason'}
-
+        
         # Map processos e heurísticas → métodos
         self._process_funcs: Dict[str, Callable[[], None]] = {
             "adaptive_sampling": self._apply_adaptive_sampling,
@@ -316,16 +323,53 @@ class Vassoura:
             )
         if self.heuristics and "scaler" not in self.process:
             raise ValueError("scaler must precede heuristics")
+        start_total = time.time()
         for p in self.process:
             func = self._process_funcs.get(p)
             if func is None:
                 raise ValueError(f"Process '{p}' not recognized.")
             func()
         for h in self.heuristics:
+            if (
+                self.max_total_runtime is not None
+                and time.time() - start_total >= self.max_total_runtime
+            ):
+                if self.verbose:
+                    print(
+                        f"[Vassoura] max_total_runtime {self.max_total_runtime}s exceeded."
+                    )
+                break
             func = self._heuristic_funcs.get(h)
             if func is None:
                 raise ValueError(f"Heuristic '{h}' not recognized.")
-            func()
+            h_start = time.time()
+            status = "success"
+            timeout = self.timeout_map.get(h)
+            try:
+                if timeout is not None:
+                    TimeoutExecutor(timeout).run(func)
+                else:
+                    func()
+            except TimeoutError:
+                status = "timeout"
+                if self.verbose:
+                    print(f"[Vassoura] heuristic '{h}' timed out after {timeout}s")
+            except Exception as exc:  # pragma: no cover
+                status = "exception"
+                if self.verbose:
+                    print(f"[Vassoura] heuristic '{h}' failed: {exc}")
+            h_end = time.time()
+            self._exec_log.append(
+                {
+                    "heuristic": h,
+                    "status": status,
+                    "start": h_start,
+                    "end": h_end,
+                    "elapsed": h_end - h_start,
+                }
+            )
+            if status != "success":
+                continue
 
         cols_keep = list(self.df_current.columns)
         if getattr(self, "_scaler", None) is not None:
@@ -1002,3 +1046,8 @@ class Vassoura:
     @property
     def dropped(self) -> List[str]:
         return [c for step in self._history for c in step["cols"]]
+
+    @property
+    def exec_log(self) -> List[Dict[str, Any]]:
+        """Execution metadata for each heuristic."""
+        return self._exec_log.copy()

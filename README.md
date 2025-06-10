@@ -123,12 +123,18 @@ vs = Vassoura(
     },
     n_steps=5,
     vif_n_steps=2,
+    timeout_map={"importance": 90, "graph_cut": 60},
+    max_total_runtime=600,
 )
 
 df_clean = vs.run(recompute=True)
 
 vs.generate_report("relatorio_corr.html")
 ```
+
+`timeout_map` define limites (em segundos) por heurística. Caso o passo
+extrapole o tempo, ele é pulado sem interromper o fluxo. Já `max_total_runtime`
+encerra o `run()` quando o orçamento global é excedido.
 
 ### 2. Limpeza funcional (atalho)
 

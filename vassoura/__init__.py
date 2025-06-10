@@ -25,6 +25,7 @@ from .utils import (  # noqa: F401
 )
 from .vif import compute_vif, remove_high_vif  # noqa: F401
 from .leakage import target_leakage  # noqa: F401
+from .timeout import TimeoutExecutor  # noqa: F401
 
 __all__ = [
     "search_dtypes",
@@ -43,6 +44,7 @@ __all__ = [
     "analisar_autocorrelacao",
     "Vassoura",
     "configure_logging",
+    "TimeoutExecutor",
 ]
 
 # ----------------------------------------------------------------------------
