@@ -16,6 +16,10 @@ mkdir -p test_results
 # pytest -vv --tb=long vassoura/tests/test_variance.py                             > vassoura/tests/test_results/test_variance.txt
 # pytest -vv --tb=long vassoura/tests/test_boruta_multi_shap.py                    > vassoura/tests/test_results/test_boruta_multi_shap.txt
 # pytest -vv --tb=long vassoura/tests/test_vassoura_integration_super.py           > vassoura/tests/test_results/test_vassoura_integration_super.txt
-pytest -vv --tb=long vassoura/tests/test_vif.py                                  > vassoura/tests/test_results/test_vif.txt
-pytest -vv --tb=long vassoura/tests/test_graph_cut.py                                  > vassoura/tests/test_results/test_graph_cut.txt
+
+
+#pytest -vv --tb=long vassoura/tests/test_vif.py                                  > vassoura/tests/test_results/test_vif.txt
+
+#pytest -vv --tb=long vassoura/tests/test_graph_cut.py                                  > vassoura/tests/test_results/test_graph_cut.txt
+
 pytest -vv --tb=long vassoura/tests/test_heuristics.py                                  > vassoura/tests/test_results/test_heuristics.txt

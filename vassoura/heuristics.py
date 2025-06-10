@@ -22,6 +22,7 @@ import logging
 import os
 import warnings
 from typing import Any, Dict, List
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -442,8 +443,93 @@ def importance(
 # Graph‑cut: mínimo conjunto de vértices em grafo de correlações        #
 # --------------------------------------------------------------------- #
 
+# def graph_cut(  # noqa: C901
+#     df: pd.DataFrame,
+#     *,
+#     target_col: str | None = None,
+#     corr_threshold: float = 0.9,
+#     keep_cols: List[str] | None = None,
+#     method: str = "pearson",
+# ) -> Dict[str, Any]:
+#     """Seleciona variáveis quebrando pares |corr| > ``corr_threshold``.
 
-def graph_cut(
+#     * Colunas numéricas → Pearson/Spearman (``method``)
+#     * Pares categóricos → **share‑of‑equality**  
+#       ``identical_share = mean(col1 == col2)``
+
+#     O subconjunto mínimo de vértices que cobre todas as arestas é
+#     aproximado via NetworkX ≥3.0.
+#     """
+#     try:
+#         import networkx as nx
+#         import numpy as np
+#     except ImportError:  # pragma: no cover
+#         warnings.warn("graph_cut heuristic skipped – networkx not installed")
+#         return {"removed": [], "artefacts": None, "meta": {}}
+
+#     keep_cols = set(keep_cols or [])
+#     df_work = df.drop(columns=[target_col], errors="ignore").copy()
+#     target = df[target_col] if target_col and target_col in df.columns else None
+
+#     # ------------------------------------------------------------------
+#     # Identify categorical columns early (before numeric encoding)
+#     # ------------------------------------------------------------------
+#     cat_cols = df_work.select_dtypes(include=["object", "category"]).columns.tolist()
+#     if cat_cols:
+#         df_work[cat_cols] = df_work[cat_cols].fillna("__MISSING__").astype(str)
+
+#     # ------------------------------------------------------------------
+#     # Numeric representation for correlation matrix
+#     # ------------------------------------------------------------------
+#     if cat_cols:
+#         # Global ordinal mapping – same mapping for all categorical cols
+#         uniques = pd.Series(pd.unique(df_work[cat_cols].values.ravel())).sort_values().tolist()
+#         mapping = {v: i for i, v in enumerate(uniques)}
+#         df_work[cat_cols] = df_work[cat_cols].apply(lambda s: s.map(mapping)).astype(float)
+
+#     corr_num = df_work.corr(method=method, numeric_only=True).abs()
+
+#     # ------------------------------------------------------------------
+#     # Build graph
+#     # ------------------------------------------------------------------
+#     G = nx.Graph()
+#     G.add_nodes_from(df_work.columns)
+
+#     # -------- Add edges for numeric ↔ numeric (and num/cat mixes) -------
+#     for i, j in combinations(corr_num.columns, 2):
+#         if corr_num.loc[i, j] > corr_threshold:
+#             G.add_edge(i, j)
+
+#     # -------- Add edges for categorical ↔ categorical -------------------
+#     if cat_cols:
+#         tmp_cat = df.drop(columns=[target_col], errors="ignore")[cat_cols].fillna("__MISSING__").astype(str)
+#         for i, j in combinations(cat_cols, 2):
+#             mask = tmp_cat[i].notna() & tmp_cat[j].notna()
+#             if not mask.any():
+#                 continue
+#             share = (tmp_cat.loc[mask, i] == tmp_cat.loc[mask, j]).mean()
+#             if share > corr_threshold:
+#                 G.add_edge(i, j)
+
+#     # ------------------------------------------------------------------
+#     # Minimum vertex cover (approx)
+#     # ------------------------------------------------------------------
+#     approx = nx.algorithms.approximation
+#     cover = (
+#         approx.min_vertex_cover(G)
+#         if hasattr(approx, "min_vertex_cover")
+#         else approx.min_weighted_vertex_cover(G)
+#     )
+
+#     removed = [v for v in cover if v not in keep_cols]
+
+#     return {
+#         "removed": removed,
+#         "artefacts": G.subgraph(cover).copy() if cover else None,
+#         "meta": {"corr_threshold": corr_threshold, "method": method},
+#     }
+
+def graph_cut(  # noqa: C901 – complexidade OK p/ heurística
     df: pd.DataFrame,
     *,
     target_col: str | None = None,
@@ -452,70 +538,76 @@ def graph_cut(
     method: str = "pearson",
 ) -> Dict[str, Any]:
     """
-    Constrói grafo onde arestas unem pares |corr| > ``corr_threshold`` e
-    resolve ``minimum vertex cover`` para quebrar todas as arestas com o
-    menor número possível de vértices (features).  Quando ``target_col`` é
-    informado e binário, colunas categóricas são temporariamente codificadas
-    por Weight of Evidence, tratando valores nulos como categoria própria.
+    Seleciona variáveis quebrando pares |corr| > ``corr_threshold``.
+
+    • Numéricas → correlação ``method``  
+    • Categóricas → porcentagem de igualdade entre valores
+      (``share = mean(col1 == col2)``). Mantém compatibilidade
+      com o mesmo threshold.
+
+    Retorna dict com:
+        removed   : list[str]
+        artefacts : subgrafo com o vertex-cover
+        meta      : parâmetros usados
     """
     try:
         import networkx as nx
         import numpy as np
-    except ImportError:
+    except ImportError:  # pragma: no cover
         warnings.warn("graph_cut heuristic skipped – networkx not installed")
         return {"removed": [], "artefacts": None, "meta": {}}
 
     keep_cols = set(keep_cols or [])
 
+    # --- preparação ---
     df_work = df.drop(columns=[target_col], errors="ignore").copy()
-    target = df[target_col] if target_col and target_col in df.columns else None
-
     cat_cols = df_work.select_dtypes(include=["object", "category"]).columns.tolist()
+
+    # normaliza NaNs em categóricas
     if cat_cols:
-        df_work[cat_cols] = df_work[cat_cols].fillna("__MISSING__")
-        if target is not None and target.dropna().nunique() == 2:
-            try:
-                from .utils import woe_encode
+        df_work[cat_cols] = df_work[cat_cols].fillna("__MISSING__").astype(str)
 
-                df_work[cat_cols] = woe_encode(
-                    df_work[cat_cols], target, cols=cat_cols
-                )[cat_cols]
-            except Exception:
-                df_work[cat_cols] = df_work[cat_cols].apply(
-                    lambda s: pd.factorize(s)[0]
-                )
-        else:
-            df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s)[0])
+        # mapeamento ordinal *global* (mesma chave p/ todas as colunas)
+        uniques = pd.Series(pd.unique(df_work[cat_cols].values.ravel())).sort_values()
+        mapping = {v: i for i, v in enumerate(uniques)}
+        df_work[cat_cols] = df_work[cat_cols].apply(lambda s: s.map(mapping)).astype(float)
 
-    corr = df_work.corr(method=method).abs()
-    np.fill_diagonal(corr.values, 0)
-    edges = [
-        (i, j)
-        for i in corr.columns
-        for j in corr.columns
-        if corr.loc[i, j] > corr_threshold and i < j
-    ]
+    # --- correlações numéricas ---
+    corr_num = df_work.corr(method=method, numeric_only=True).abs()
 
+    # --- grafo ---
+    import itertools as _it
     G = nx.Graph()
-    G.add_nodes_from(corr.columns)
-    G.add_edges_from(edges)
+    G.add_nodes_from(df_work.columns)
 
-    # ``min_vertex_cover`` was removed in newer NetworkX versions (>=3.0).
-    # ``min_weighted_vertex_cover`` is the replacement.  For compatibility with
-    # older versions we try ``min_vertex_cover`` first and fall back to the
-    # weighted variant if needed.
+    # arestas numéricas
+    for i, j in _it.combinations(corr_num.columns, 2):
+        if corr_num.loc[i, j] > corr_threshold:
+            G.add_edge(i, j)
+
+    # arestas categóricas (share-of-equality)
+    if cat_cols:
+        tmp_cat = df[cat_cols].fillna("__MISSING__").astype(str)
+        for i, j in _it.combinations(cat_cols, 2):
+            share = (tmp_cat[i] == tmp_cat[j]).mean()
+            if share > corr_threshold:
+                G.add_edge(i, j)
+
+    # --- mínimo vertex cover (aprox) ---
     approx = nx.algorithms.approximation
-    if hasattr(approx, "min_vertex_cover"):
-        cover = approx.min_vertex_cover(G)
-    else:
-        cover = approx.min_weighted_vertex_cover(G)
+    cover = (
+        approx.min_vertex_cover(G)
+        if hasattr(approx, "min_vertex_cover")
+        else approx.min_weighted_vertex_cover(G)
+    )
     removed = [v for v in cover if v not in keep_cols]
 
     return {
         "removed": removed,
-        "artefacts": G.subgraph(cover).copy(),
+        "artefacts": G.subgraph(cover).copy() if cover else None,
         "meta": {"corr_threshold": corr_threshold, "method": method},
     }
+
 
 
 # --------------------------------------------------------------------- #

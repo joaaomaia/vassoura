@@ -19,22 +19,64 @@ def _numeric_dataset(n=250, seed=0, high_corr=True):
     return pd.DataFrame({"x1": x1, "x2": x2, "x3": x3, "target": target.astype(int)})
 
 
-def _categorical_dataset(all_categorical=True, seed=1):
+def _categorical_dataset(all_categorical: bool = True, seed: int = 1) -> pd.DataFrame:
+    """
+    Gera um DataFrame com diversos cenários para testes de heurísticas:
+      - Distribuições balanceadas e desbalanceadas
+      - Alta correlação entre cat1 e cat2 (80% iguais, 20% aleatórios)
+      - Valores missing em categorias e numéricos
+      - Outliers na variável numérica
+      - Cardinalidade moderada (5 categorias)
+    Parâmetros
+    ----------
+    all_categorical : bool
+        Se False, adiciona também uma coluna numérica (`num1`).
+    seed : int
+        Semente para reproducibilidade.
+    """
     rng = np.random.default_rng(seed)
-    base = np.array(["A", "B", "C", "D"])
+    n = 10_000
 
-    cat1 = rng.choice(base, size=300, p=[0.4, 0.4, 0.1, 0.1])
-    noise = rng.choice(["", "_x"], size=300, p=[0.9, 0.1])
-    # Usa np.char.add para evitar UFuncNoLoopError
-    cat2 = np.char.add(cat1, noise)
+    # Definição das categorias e probabilidades
+    base = np.array(["A", "B", "C", "D", "E"])
+    probs = np.array([0.3, 0.25, 0.2, 0.15, 0.1])  # soma = 1.0
 
-    cat3 = rng.choice(base, size=300)
-    df = pd.DataFrame({"cat1": cat1, "cat2": cat2, "cat3": cat3})
+    # cat1: distribuição não uniforme
+    cat1 = rng.choice(base, size=n, p=probs)
+
+    # cat2: 80% igual a cat1, 20% aleatório
+    mask = rng.random(n) < 0.8
+    cat2 = np.where(mask, cat1, rng.choice(base, size=n, p=probs))
+
+    # cat3: distribuição uniforme
+    cat3 = rng.choice(base, size=n)
+
+    # Injeta valores missing (~5%)
+    missing_idx = rng.choice(n, size=int(0.05 * n), replace=False)
+    cat1 = cat1.astype(object)
+    cat3 = cat3.astype(object)
+    cat1[missing_idx] = None
+    cat3[missing_idx] = None
+
+    df = pd.DataFrame({
+        "cat1": cat1,
+        "cat2": cat2,
+        "cat3": cat3,
+    })
 
     if not all_categorical:
-        df["num1"] = rng.normal(size=300)  # coluna numérica extra
+        # Variável numérica com distribuição normal
+        num1 = rng.normal(loc=0, scale=1, size=n)
+        # Injeta missing nos mesmos índices
+        num1[missing_idx] = np.nan
+        # Cria alguns outliers
+        outliers_idx = rng.choice(n, size=int(0.01 * n), replace=False)
+        num1[outliers_idx] *= 10
+        df["num1"] = num1
 
-    df["target"] = rng.integers(0, 2, size=300)
+    # Target binário balanceado (~50/50)
+    df["target"] = rng.integers(0, 2, size=n)
+
     return df
 
 

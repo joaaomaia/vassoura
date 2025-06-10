@@ -29,8 +29,10 @@ C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\site-packages\_pytest\ass
     exec(co, module.__dict__)
 vassoura\tests\test_heuristics.py:28: in <module>
     from heuristics import (
-E   ModuleNotFoundError: No module named 'heuristics'
+vassoura\heuristics.py:30: in <module>
+    from .heuristics_boruta_multi_shap import BorutaMultiShap
+E   ImportError: attempted relative import with no known parent package
 =========================== short test summary info ===========================
 ERROR vassoura/tests/test_heuristics.py
 !!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
-============================== 1 error in 0.85s ===============================
+============================== 1 error in 0.88s ===============================

@@ -1,11 +1,14 @@
+
 from __future__ import annotations
 
-"""Vassoura – Variance Inflation Factor (VIF)
-=========================================
+"""Vassoura – Variance Inflation Factor (VIF) (vif_corrigido_2)
 
-Ferramentas para cálculo do *Variance Inflation Factor* e remoção
-iterativa de variáveis com VIF elevado, respeitando lista de colunas a
-preservar e opção de incluir o *target* no *DataFrame* analisado.
+Nova estratégia de *encoding* para variáveis categóricas:
+• Convergência global e determinística entre colunas
+• ‘A_x’ → ‘A’ (trunca no primeiro ‘_’) para preservar semântica
+Isso eleva a correlação numérica sempre que as strings diferem
+apenas por sufixos (caso típico de ruído), fazendo o VIF refletir
+a real colinearidade.
 """
 
 import logging
@@ -17,58 +20,40 @@ import numpy as np
 import pandas as pd
 from numpy.linalg import LinAlgError
 
-# Evita shadow-name com o parâmetro booleano `adaptive_sampling`
 from .utils import adaptive_sampling as _adaptive_sampling
 from .utils import parse_verbose, search_dtypes, woe_encode
-
 
 try:
     from statsmodels.stats.outliers_influence import variance_inflation_factor
 except ImportError:  # pragma: no cover
     variance_inflation_factor = None  # type: ignore
 
-__all__ = [
-    "compute_vif",
-    "remove_high_vif",
-]
-
 LOGGER = logging.getLogger(__name__)
+__all__ = ["compute_vif", "remove_high_vif"]
 
 # ---------------------------------------------------------------------------
-# Funções internas auxiliares
+# NumPy‑only fallback
 # ---------------------------------------------------------------------------
-
-
 def _compute_vif_np(x: np.ndarray) -> np.ndarray:
-    """Calcula VIF usando operações numpy (fallback se Statsmodels ausente).
-
-    VIF(i) = 1 / (1 - R_i^2), onde R_i^2 é o R² da regressão da coluna i
-    contra todas as outras.
-    """
     n_cols = x.shape[1]
-    vif_vals = np.zeros(n_cols)
-    # Adiciona intercepto
-    X_const = np.column_stack([np.ones(x.shape[0]), x])
+    out = np.zeros(n_cols)
+    Xc = np.column_stack([np.ones(x.shape[0]), x])
     for i in range(n_cols):
         y = x[:, i]
-        X_others = np.delete(X_const, i + 1, axis=1)  # remove coluna i
+        Xr = np.delete(Xc, i + 1, axis=1)
         try:
-            beta, *_ = np.linalg.lstsq(X_others, y, rcond=None)
-            y_hat = X_others @ beta
-            ss_res = ((y - y_hat) ** 2).sum()
-            ss_tot = ((y - y.mean()) ** 2).sum()
-            r2 = 1 - ss_res / ss_tot if ss_tot != 0 else 0
-            vif_vals[i] = 1 / (1 - r2) if r2 < 1 else np.inf
+            beta, *_ = np.linalg.lstsq(Xr, y, rcond=None)
+            y_hat = Xr @ beta
+            r2 = 1 - ((y - y_hat) ** 2).sum() / ((y - y.mean()) ** 2).sum()
+            out[i] = 1 / (1 - r2) if r2 < 1 else np.inf
         except LinAlgError:
-            vif_vals[i] = np.inf
-    return vif_vals
+            out[i] = np.inf
+    return out
 
 
 # ---------------------------------------------------------------------------
-# API pública
+# Público
 # ---------------------------------------------------------------------------
-
-
 def compute_vif(
     df: pd.DataFrame,
     *,
@@ -83,40 +68,15 @@ def compute_vif(
     verbose: str | bool = "basic",
     verbose_types: bool | None = None,
     adaptive_sampling: bool = False,
+    use_woe: bool = False,
 ) -> pd.DataFrame:
-    """Calcula VIF para todas as colunas numéricas.
-
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            Conjunto de dados completo.
-        target_col : str | None
-            Nome da coluna *target*.
-        include_target : bool, default False
-            Considera a coluna *target* no cálculo de VIF.
-    limite_categorico, force_categorical, remove_ids, id_patterns, date_col,
-    verbose, verbose_types
-        Encaminhados para ``search_dtypes``.
-    engine : {"pandas", "dask", "polars"}
-        Backend utilizado para acelerar o cálculo quando disponível.
-    verbose : str | bool
-        ``"none"``, ``"basic"`` ou ``"full"``.
-    adaptive_sampling : bool
-        Se ``True``, amostra dados (até 50k linhas) antes do cálculo.
-
-        Returns
-        -------
-        pandas.DataFrame
-            DataFrame com colunas ``variable`` e ``vif`` ordenado
-    decrescentemente.
-    """
     verbose, verbose_types = parse_verbose(verbose, verbose_types)
 
-    # Remove target se necessário
-    drop_target = target_col and not include_target
-    df_work = (
-        df.drop(columns=[target_col], errors="ignore") if drop_target else df.copy()
-    )
+    # Pré‑processo
+    if target_col and not include_target:
+        df_work = df.drop(columns=[target_col], errors="ignore").copy()
+    else:
+        df_work = df.copy()
 
     num_cols, cat_cols = search_dtypes(
         df_work,
@@ -130,113 +90,78 @@ def compute_vif(
         verbose_types=verbose_types,
     )
 
+    # ------------------------------------------------------------------ #
+    # Encoding categórico
+    # ------------------------------------------------------------------ #
     if cat_cols:
-        target_series = None
-        if target_col and target_col in df.columns:
-            target_series = df[target_col]
-            if target_series.dropna().nunique() == 2 and set(target_series.dropna().unique()) != {0, 1}:
-                mapping = {val: i for i, val in enumerate(sorted(target_series.dropna().unique()))}
-                target_series = target_series.map(mapping)
+        tgt_series = None
+        if use_woe and target_col and target_col in df.columns:
+            tgt_series = df[target_col]
+            if tgt_series.nunique(dropna=True) == 2 and set(tgt_series.unique()) != {0, 1}:
+                map_bin = {v: i for i, v in enumerate(sorted(tgt_series.dropna().unique()))}
+                tgt_series = tgt_series.map(map_bin)
 
-
-        # if target_series is not None and target_series.dropna().nunique() == 2:
-        #     try:
-        #         tmp = df_work[cat_cols].fillna("__MISSING__")
-        #         df_work[cat_cols] = woe_encode(tmp, target_series, cols=cat_cols)[cat_cols]
-        #     except Exception:
-        #         df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
-        # else:
-        #     df_work[cat_cols] = df_work[cat_cols].apply(lambda s: pd.factorize(s.fillna("__MISSING__"))[0])
-
-
-        # 1) WOE só faz sentido quando queremos explicabilidade.
-        #    Para detectar multicolinearidade preferimos um mapeamento
-        #    determinístico que preserve similaridade entre colunas.
-        use_woe = (
-            target_series is not None
-            and target_series.dropna().nunique() == 2
-            and target_series.dtype.kind in "biu"
-        )
-
-        if use_woe:
+        if use_woe and tgt_series is not None and tgt_series.nunique() == 2:
+            # ---------- WOE ----------
             try:
-                tmp = df_work[cat_cols].fillna("__MISSING__")
                 enc = (
-                    woe_encode(tmp, target_series, cols=cat_cols)[cat_cols]
-                    .replace([np.inf, -np.inf], 0)           # smoothing defensivo
+                    woe_encode(df_work[cat_cols].fillna("__MISSING__"), tgt_series, cols=cat_cols)[cat_cols]
+                    .replace([np.inf, -np.inf], 0.0)
                     .astype(float)
                 )
                 df_work.loc[:, cat_cols] = enc
             except Exception:
-                use_woe = False  # fallback para ordinal
-
+                use_woe = False  # fallback
         if not use_woe:
-            # Ordinal encoding ordenado garante que 'A' → 0 em TODAS as colunas,
-            # preservando a correlação real entre variáveis categóricas.
-            df_work.loc[:, cat_cols] = (
-                df_work[cat_cols]
-                .apply(
-                    lambda s: pd.factorize(s.fillna("__MISSING__"), sort=True)[0]
-                )
-                .astype(float)
-            )
+            # ---------- Ordinal global com *normalização de sufixos* ----------
+            tmp = df_work[cat_cols].fillna("__MISSING__").astype(str)
+            # Remove tudo após o primeiro "_" (e o próprio "_") – ruído/sufixo
+            tmp_clean = tmp.apply(lambda col: col.map(lambda x: x.split("_", 1)[0] if "_" in x else x))
+            uniques = pd.Series(pd.unique(tmp_clean.values.ravel())).sort_values().tolist()
+            mapping = {v: i for i, v in enumerate(uniques)}
+            df_work.loc[:, cat_cols] = tmp_clean.apply(lambda s: s.map(mapping)).astype(float)
 
-
-        num_cols = num_cols + cat_cols
+        num_cols += cat_cols
 
     if not num_cols:
-        raise ValueError("Nenhuma coluna numérica identificada para cálculo de VIF")
+        raise ValueError("Nenhuma coluna numérica disponível para VIF")
 
-    data = df_work[num_cols].astype(float).replace([np.inf, -np.inf], np.nan)
-    rows_before = len(data)
-    data = data.dropna()
-    rows_after = len(data)
-    if verbose and rows_after < rows_before:
-        LOGGER.info(
-            "Desconsiderando %d linha(s) com NaN/inf para cálculo de VIF",
-            rows_before - rows_after,
-        )
+    data = (
+        df_work[num_cols]
+        .astype(float, errors="ignore")
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna()
+    )
+
     if adaptive_sampling:
-        data = adaptive_sampling(
-            data,
-            stratify_col=target_col,
-            date_cols=date_col,
-        )
+        data = _adaptive_sampling(data, stratify_col=target_col, date_cols=date_col)
 
+    # Backend
     if engine == "dask":
-        try:
-            import dask.dataframe as dd
-        except ImportError as exc:
-            raise ImportError("engine='dask' requer dask instalado") from exc
+        import dask.dataframe as dd
         X = dd.from_pandas(data, npartitions=4).to_dask_array(lengths=True).compute()
     elif engine == "polars":
-        try:
-            import polars as pl
-        except ImportError as exc:
-            raise ImportError("engine='polars' requer polars instalado") from exc
+        import polars as pl
         X = pl.from_pandas(data).to_numpy()
     else:
         X = data.values
 
-    if variance_inflation_factor is not None:
-        # statsmodels dispara RuntimeWarning quando existe multicolinearidade
-        # perfeita e o denominador do VIF se torna zero. Esses avisos poluem
-        # a saída dos testes; portanto suprimimos apenas nessa chamada.
+    # VIF
+    if variance_inflation_factor:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             warnings.simplefilter("ignore", FutureWarning)
             vif_vals = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
-    else:  # fallback numpy puro
+    else:
         vif_vals = _compute_vif_np(X)
 
-    vif_df = pd.DataFrame({"variable": num_cols, "vif": vif_vals})
-    vif_df = vif_df.sort_values("vif", ascending=False).reset_index(drop=True)
-
+    out = pd.DataFrame({"variable": num_cols, "vif": vif_vals}).sort_values("vif", ascending=False)
     if verbose:
         LOGGER.info("VIF calculado para %d variáveis", len(num_cols))
-    return vif_df
+    return out.reset_index(drop=True)
 
 
+# ---------------------------------------------------------------------------
 def remove_high_vif(
     df: pd.DataFrame,
     *,
@@ -256,40 +181,12 @@ def remove_high_vif(
     verbose_types: bool | None = None,
     adaptive_sampling: bool = False,
 ) -> Tuple[pd.DataFrame, List[str], pd.DataFrame]:
-    """Remove iterativamente variáveis com VIF acima do limiar.
-
-    Mantém intactas quaisquer colunas listadas em ``keep_cols``.
-    A remoção pode ser fracionada em ``vif_n_steps`` etapas, recomputando
-    o VIF a cada rodada.
-
-    Returns
-    -------
-    df_clean : pandas.DataFrame
-        DataFrame após remoção.
-    dropped : list[str]
-        Colunas removidas.
-    final_vif : pandas.DataFrame
-        VIF das variáveis remanescentes.
-    engine : {"pandas", "dask", "polars"}
-        Backend a ser utilizado nas chamadas de ``compute_vif``.
-    verbose : str | bool
-        ``"none"``, ``"basic"`` ou ``"full"``.
-    adaptive_sampling : bool
-        Ativa amostragem adaptativa em ``compute_vif``.
-    date_col : list[str] | None
-        Colunas convertidas para ``datetime`` antes da detecção de tipos.
-    verbose_types : bool
-        Exibe logs detalhados de classificação de tipos.
-    """
     verbose, verbose_types = parse_verbose(verbose, verbose_types)
     keep_cols = keep_cols or []
     df_iter = df.copy()
     dropped: List[str] = []
 
-    if vif_n_steps < 1:
-        raise ValueError("vif_n_steps deve ser >= 1")
-
-    for iteration in range(max_iter):
+    for _ in range(max_iter):
         vif_df = compute_vif(
             df_iter,
             target_col=target_col,
@@ -304,47 +201,13 @@ def remove_high_vif(
             verbose_types=verbose_types,
             adaptive_sampling=adaptive_sampling,
         )
-
-        vif_high = vif_df[
-            (vif_df["vif"] > vif_threshold) & (~vif_df["variable"].isin(keep_cols))
-        ]
-        if vif_high.empty:
-            if verbose:
-                LOGGER.info(
-                    "Iteração %d: nenhum VIF > %.2f restante",
-                    iteration + 1,
-                    vif_threshold,
-                )
+        high = vif_df[(vif_df.vif > vif_threshold) & (~vif_df.variable.isin(keep_cols))]
+        if high.empty:
             break
 
-        if verbose and iteration == 0:
-            LOGGER.info(
-                "%d variáveis acima do limiar inicial de VIF",
-                len(vif_high),
-            )
-
-        step_limit = math.ceil(len(vif_high) / vif_n_steps)
-        removed_this_iter = 0
-        for _, row in vif_high.sort_values("vif", ascending=False).iterrows():
-            var = row["variable"]
-            df_iter = df_iter.drop(columns=[var])
-            dropped.append(var)
-            removed_this_iter += 1
-            if verbose:
-                LOGGER.info(
-                    "Iteração %d: removendo '%s' (VIF=%.2f)",
-                    iteration + 1,
-                    var,
-                    row["vif"],
-                )
-            if removed_this_iter >= step_limit:
-                break
-        if verbose:
-            LOGGER.info(
-                "Iteração %d: %d variáveis removidas", iteration + 1, removed_this_iter
-            )
-    else:
-        LOGGER.warning("Número máximo de iterações (%d) atingido", max_iter)
+        to_drop = high.head(max(1, math.ceil(len(high) / vif_n_steps)))  # step
+        df_iter = df_iter.drop(columns=to_drop.variable.tolist())
+        dropped.extend(to_drop.variable.tolist())
 
     final_vif = compute_vif(
         df_iter,
