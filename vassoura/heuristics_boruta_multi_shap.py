@@ -11,8 +11,10 @@ from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.base import clone
 from sklearn.exceptions import ConvergenceWarning
 
-from .scaler import DynamicScaler
-from .utils import woe_encode
+# Imports absolutos para evitar falhas quando o módulo é executado
+# fora do contexto de pacote.
+from vassoura.scaler import DynamicScaler
+from vassoura.utils import woe_encode
 
 
 class BorutaMultiShap:

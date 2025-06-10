@@ -27,8 +27,10 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
-from .heuristics_boruta_multi_shap import BorutaMultiShap
-from .scaler import DynamicScaler
+# Imports absolutos para funcionar mesmo se o módulo for carregado
+# fora de um pacote (por ex., via ``python heuristics.py``).
+from vassoura.heuristics_boruta_multi_shap import BorutaMultiShap
+from vassoura.scaler import DynamicScaler
 
 # Dependências opcionais (import inside functions)
 
@@ -234,7 +236,8 @@ def importance(
         woe_cols or X.select_dtypes(include=["object", "category"]).columns.tolist()
     )
     if cat_cols:
-        from .utils import woe_encode
+        # Import absoluto para funcionar em execuções fora do pacote
+        from vassoura.utils import woe_encode
 
         X = woe_encode(X, y, cols=cat_cols)
     X = X.fillna(0)
