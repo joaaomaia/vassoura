@@ -124,3 +124,10 @@ def test_vif_no_numeric_columns_raises():
     # Definimos limite_categorico=0 → impede fallback automático
     with pytest.raises(ValueError):
         compute_vif(df, target_col="target", limite_categorico=0, verbose="none")
+
+
+def test_vif_all_inf_returns_nan():
+    """DataFrames que ficam vazios após remoção de inf devem retornar NaN."""
+    df = pd.DataFrame({"x": [np.inf, np.inf], "target": [0, 1]})
+    vif = compute_vif(df, target_col="target", verbose="none")
+    assert vif["vif"].isna().all()
