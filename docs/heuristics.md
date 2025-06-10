@@ -38,3 +38,13 @@ Detect features highly correlated with both the date column and the target (pote
 
 ### `target_leakage(df, target_col, threshold=0.8, method='spearman', keep_cols=None, id_cols=None, date_cols=None)`
 Highlight columns with very high absolute correlation with the target, indicating possible data leakage.
+
+### `boruta_multi_shap(df, target_col, n_iter=50, sample_frac=0.7, approval_ratio=0.9, n_batches=None, ...)`
+Run a Boruta-style selector using multiple models and SHAP values. When
+`n_batches` is specified the columns are divided into smart batches using
+`build_feature_batches` to reduce memory usage while keeping a representative
+mix of features.
+
+### `build_feature_batches(df, target_col, n_batches=5, quick_gain=True, corr_balance=True, random_state=42)`
+Utility helper to create balanced feature batches combining cost-aware binning,
+a quick LightGBM ranking and a correlation-based round robin spread.
