@@ -10,3 +10,4 @@ mplcursors==0.6
 shap>=0.47
 lightgbm>=4.0
 networkx>=3.2
+scikit-learn>=1.4
