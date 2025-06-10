@@ -996,6 +996,11 @@ def boruta_multi_shap(
     approval_ratio: float = 0.9,
     random_state: int | None = None,
     models: list[dict[str, object]] | None = None,
+    model_names: list[str] | None = None,
+    shap_rows: int | None = None,
+    estimators: int = 50,
+    max_depth: int = 5,
+    fast_mode: bool = False,
     problem: str = "auto",
     logger: logging.Logger | None = None,
 ) -> Dict[str, Any]:
@@ -1007,5 +1012,10 @@ def boruta_multi_shap(
         approval_ratio=approval_ratio,
         random_state=random_state,
         models=models,
+        model_names=model_names,
+        shap_rows=shap_rows,
+        estimators=estimators,
+        max_depth=max_depth,
+        fast_mode=fast_mode,
     )
     return selector(df, target_col, problem=problem, logger=logger)
