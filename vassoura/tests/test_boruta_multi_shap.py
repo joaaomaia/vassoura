@@ -65,3 +65,23 @@ def test_boruta_multi_shap_fast_mode():
     })
     result = boruta_multi_shap(df, "target", fast_mode=True, random_state=4)
     assert "timings" in result["artefacts"]
+
+
+def test_boruta_multi_shap_batches():
+    rng = np.random.default_rng(5)
+    df = pd.DataFrame({
+        "a": rng.normal(size=60),
+        "b": rng.normal(size=60),
+        "c": rng.normal(size=60),
+        "target": (rng.normal(size=60) > 0).astype(int),
+    })
+    result = boruta_multi_shap(
+        df,
+        "target",
+        n_iter=1,
+        sample_frac=0.8,
+        random_state=5,
+        n_batches=2,
+    )
+    assert result["meta"]["n_batches"] == 2
+    assert "batches" in result["artefacts"]

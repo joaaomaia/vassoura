@@ -29,7 +29,7 @@ import pandas as pd
 
 # Imports absolutos para funcionar mesmo se o módulo for carregado
 # fora de um pacote (por ex., via ``python heuristics.py``).
-from vassoura.heuristics_boruta_multi_shap import BorutaMultiShap
+from vassoura.heuristics_boruta_multi_shap import BorutaMultiShap, build_feature_batches
 from vassoura.scaler import DynamicScaler
 
 # Dependências opcionais (import inside functions)
@@ -1001,6 +1001,7 @@ def boruta_multi_shap(
     estimators: int = 50,
     max_depth: int = 5,
     fast_mode: bool = False,
+    n_batches: int | None = None,
     problem: str = "auto",
     logger: logging.Logger | None = None,
 ) -> Dict[str, Any]:
@@ -1018,4 +1019,55 @@ def boruta_multi_shap(
         max_depth=max_depth,
         fast_mode=fast_mode,
     )
-    return selector(df, target_col, problem=problem, logger=logger)
+
+    if n_batches is None or n_batches <= 1:
+        return selector(df, target_col, problem=problem, logger=logger)
+
+    batches = build_feature_batches(
+        df,
+        target_col,
+        n_batches=n_batches,
+        random_state=random_state or 42,
+    )
+    kept_all: list[str] = []
+    removed_all: list[str] = []
+    shap_list = []
+    approvals_list = []
+    elapsed_tot = 0.0
+    metas = []
+    for cols in batches:
+        result = selector(df[cols + [target_col]], target_col, problem=problem, logger=logger)
+        kept_all.extend(result.get("kept", []))
+        removed_all.extend(result.get("removed", []))
+        artefacts = result.get("artefacts", {})
+        shap = artefacts.get("shap_mean_by_model")
+        if isinstance(shap, pd.DataFrame):
+            shap_list.append(shap)
+        appr = artefacts.get("approvals")
+        if isinstance(appr, pd.Series):
+            approvals_list.append(appr)
+        meta = result.get("meta", {})
+        elapsed_tot += meta.get("elapsed_sec", 0.0)
+        metas.append(meta)
+
+    shap_df = pd.concat(shap_list).groupby(level=0).mean() if shap_list else pd.DataFrame()
+    approvals = sum(approvals_list) if approvals_list else pd.Series(dtype=int)
+
+    artefacts = {
+        "shap_mean_by_model": shap_df,
+        "approvals": approvals,
+        "batches": batches,
+        "timings": {"total_sec": elapsed_tot},
+    }
+
+    meta = {
+        "n_batches": n_batches,
+        "elapsed_sec": elapsed_tot,
+    }
+
+    return {
+        "kept": sorted(set(kept_all)),
+        "removed": sorted(set(removed_all)),
+        "artefacts": artefacts,
+        "meta": meta,
+    }

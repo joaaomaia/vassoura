@@ -18,6 +18,120 @@ from vassoura.scaler import DynamicScaler
 from vassoura.utils import woe_encode
 
 
+def _cost_balanced_binning(df: pd.DataFrame, n_batches: int) -> list[list[str]]:
+    """Initial greedy bin packing based on estimated column processing cost."""
+    cost = {}
+    for col in df.columns:
+        s = df[col]
+        is_cat = s.dtype.name in {"category", "object"}
+        n_uniq = min(s.nunique(dropna=False), 1000)
+        cost[col] = 1 + 0.5 * int(is_cat) + 0.02 * n_uniq
+    sorted_cols = sorted(cost, key=cost.get, reverse=True)
+    batch_cost = [0.0] * n_batches
+    batches = [[] for _ in range(n_batches)]
+    for col in sorted_cols:
+        idx = int(np.argmin(batch_cost))
+        batches[idx].append(col)
+        batch_cost[idx] += cost[col]
+    return batches
+
+
+def _quick_gain_stratify(
+    df: pd.DataFrame,
+    target_col: str,
+    batches: list[list[str]],
+    random_state: int | None,
+) -> list[list[str]]:
+    """Redistribute columns by rough LightGBM gain ranking."""
+    from lightgbm import LGBMClassifier, LGBMRegressor
+
+    X = df.drop(columns=[target_col])
+    y = df[target_col]
+
+    if y.nunique() == 2:
+        model = LGBMClassifier(
+            n_estimators=30,
+            max_depth=3,
+            learning_rate=0.1,
+            random_state=random_state,
+            n_jobs=-1,
+            verbosity=-1,
+        )
+    else:
+        model = LGBMRegressor(
+            n_estimators=30,
+            max_depth=3,
+            learning_rate=0.1,
+            random_state=random_state,
+            n_jobs=-1,
+            verbosity=-1,
+        )
+
+    try:
+        model.fit(X, y)
+        imp = pd.Series(model.feature_importances_, index=X.columns)
+    except Exception:
+        return batches
+
+    ranks = imp.sort_values(ascending=False).index.tolist()
+    qtiles = np.array_split(ranks, len(batches))
+    new_batches = [[] for _ in range(len(batches))]
+    for q in qtiles:
+        for i, feat in enumerate(q):
+            new_batches[i % len(batches)].append(str(feat))
+    return new_batches
+
+
+def _decorrelate_round_robin(
+    df: pd.DataFrame,
+    batches: list[list[str]],
+    target_col: str,
+) -> list[list[str]]:
+    """Spread highly correlated features across batches via clustering."""
+    num_df = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
+    if num_df.shape[1] <= 1:
+        return batches
+    corr = num_df.corr().abs().fillna(0)
+    try:
+        from scipy.cluster.hierarchy import linkage, fcluster
+
+        Z = linkage(corr, method="average")
+        labels = fcluster(Z, len(batches) * 3, criterion="maxclust")
+        clusters: dict[int, list[str]] = {}
+        for col, lab in zip(corr.columns, labels):
+            clusters.setdefault(int(lab), []).append(col)
+        clusters_sorted = sorted(clusters.values(), key=len, reverse=True)
+        new_batches = [[] for _ in range(len(batches))]
+        for idx, cols in enumerate(clusters_sorted):
+            new_batches[idx % len(batches)].extend(cols)
+        # append non-numeric cols round-robin
+        other = [c for c in df.columns if c not in corr.columns and c != target_col]
+        for idx, col in enumerate(other):
+            new_batches[idx % len(batches)].append(col)
+        return new_batches
+    except Exception:
+        return batches
+
+
+def build_feature_batches(
+    df: pd.DataFrame,
+    target_col: str,
+    n_batches: int = 5,
+    *,
+    random_state: int | None = None,
+    quick_gain: bool = True,
+    corr_balance: bool = True,
+) -> list[list[str]]:
+    """Create balanced feature batches for Boruta Multi SHAP."""
+
+    batches = _cost_balanced_binning(df.drop(columns=[target_col]), n_batches)
+    if quick_gain:
+        batches = _quick_gain_stratify(df, target_col, batches, random_state)
+    if corr_balance:
+        batches = _decorrelate_round_robin(df, batches, target_col)
+    return batches
+
+
 class BorutaMultiShap:
     """Boruta-inspired feature selector using multiple models and SHAP values."""
 

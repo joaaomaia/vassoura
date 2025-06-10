@@ -127,6 +127,7 @@ vs = Vassoura(
         "boruta_estimators": 30,
         "boruta_max_depth": 4,
         "boruta_fast_mode": False,
+        "boruta_n_batches": 5,
     },
     n_steps=5,
     vif_n_steps=2,
@@ -143,6 +144,10 @@ vs.generate_report("relatorio_corr.html")
 `timeout_map` define limites (em segundos) por heurística. Caso o passo
 extrapole o tempo, ele é pulado sem interromper o fluxo. Já `max_total_runtime`
 encerra o `run()` quando o orçamento global é excedido.
+
+`boruta_n_batches` permite dividir as features em lotes balanceados antes de rodar
+a heurística Boruta Multi SHAP, reduzindo consumo de memória e tempo sem perder
+representatividade.
 
 ### 2. Limpeza funcional (atalho)
 
