@@ -19,6 +19,7 @@ dependencies = [
     "scipy>=1.11",
     "statsmodels>=0.14",
     "networkx>=3.2",
+    "scikit-learn>=1.4",
 ]
 
 classifiers = [
@@ -39,7 +40,6 @@ dev = ["pytest", "coverage", "pre-commit", "black", "isort"]
 docs = ["mkdocs-material"]
 
 [tool.setuptools.packages.find]
-where = ["vassoura"]
 include = ["vassoura*"]
 
 [tool.setuptools]
