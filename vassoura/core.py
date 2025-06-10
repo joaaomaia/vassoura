@@ -420,6 +420,11 @@ class Vassoura:
                 )
         return self.df_current
 
+    # --------------------------------------------------------------
+    def run_all(self, **kwargs) -> pd.DataFrame:
+        """Backward compatible alias for ``run()``."""
+        return self.run(**kwargs)
+
     def remove_additional(self, columns: List[str]) -> None:
         """Força remoção manual de colunas pós-limpeza."""
         self._drop(columns, reason="manual")

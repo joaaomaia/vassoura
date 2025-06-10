@@ -124,10 +124,11 @@ vs = Vassoura(
     n_steps=5,
     vif_n_steps=2,
     timeout_map={"importance": 90, "graph_cut": 60},
+    chunk_size=25,
     max_total_runtime=600,
 )
 
-df_clean = vs.run(recompute=True)
+df_clean = vs.run_all()
 
 vs.generate_report("relatorio_corr.html")
 ```
