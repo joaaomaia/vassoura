@@ -1,0 +1,23 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
+configfile: pyproject.toml
+plugins: anyio-4.9.0
+collecting ... collected 4 items
+
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_basic PASSED [ 25%]
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_respects_scaled_flag PASSED [ 50%]
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_class_imbalance PASSED [ 75%]
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_vassoura_integration PASSED [100%]
+
+============================== warnings summary ===============================
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_basic
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_respects_scaled_flag
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_class_imbalance
+vassoura/tests/test_boruta_multi_shap.py::test_boruta_multi_shap_vassoura_integration
+  C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\site-packages\shap\explainers\_tree.py:583: UserWarning: LightGBM binary classifier with TreeExplainer shap values output has changed to a list of ndarray
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 4 passed, 4 warnings in 3.80s ========================

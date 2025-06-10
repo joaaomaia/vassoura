@@ -1,116 +1,27 @@
-....F.F                                                                  [100%]
-=================================== FAILURES ===================================
-_______________________ test_psi_stability_detects_drift _______________________
+============================= test session starts =============================
+platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
+configfile: pyproject.toml
+plugins: anyio-4.9.0
+collecting ... collected 7 items
 
-synthetic_df =            date        x1        x2        x3  ...  cat1  cat2  cat_dom  target
-0    2024-01-01  0.304717  0.357674 -0...     A       0
-499  2025-09-07 -1.495061 -1.379120 -1.181479  ...     A     A        A       0
+vassoura/tests/test_heuristics.py::test_iv_low_iv_removed PASSED         [ 14%]
+vassoura/tests/test_heuristics.py::test_variance_filters_const_and_dominant PASSED [ 28%]
+vassoura/tests/test_heuristics.py::test_graph_cut_removes_one_of_highly_correlated_pair PASSED [ 42%]
+vassoura/tests/test_heuristics.py::test_ks_separation_filters_low_separation PASSED [ 57%]
+vassoura/tests/test_heuristics.py::test_psi_stability_detects_drift PASSED [ 71%]
+vassoura/tests/test_heuristics.py::test_partial_corr_cluster_removes_in_correlated_block PASSED [ 85%]
+vassoura/tests/test_heuristics.py::test_all_artefacts_present PASSED     [100%]
 
-[500 rows x 12 columns]
+============================== warnings summary ===============================
+vassoura/tests/test_heuristics.py::test_psi_stability_detects_drift
+  C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\lib\site-packages\pandas\core\arraylike.py:399: RuntimeWarning: divide by zero encountered in log
+    result = getattr(ufunc, method)(*inputs, **kwargs)
 
-    def test_psi_stability_detects_drift(synthetic_df: pd.DataFrame):
-        res = psi_stability(
-            synthetic_df,
-            date_col="date",
-            window=("2024", "2025"),
-            psi_thr=0.25,
-            bins=10,
-        )
-        assert "drift_var" in res["removed"]
-        # Coluna sem drift deve ficar
->       assert "x1" not in res["removed"]
-E       AssertionError: assert 'x1' not in ['x1', 'x2', 'x3', 'low_iv', 'low_ks', 'drift_var']
+vassoura/tests/test_heuristics.py::test_all_artefacts_present
+  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\heuristics.py:896: RuntimeWarning: invalid value encountered in sqrt
+    pcorr = -prec / np.sqrt(np.outer(np.diag(prec), np.diag(prec)))
 
-vassoura/tests/test_heuristics.py:181: AssertionError
-__________________________ test_all_artefacts_present __________________________
-
-synthetic_df =            date        x1        x2        x3  ...  cat1  cat2  cat_dom  target
-0    2024-01-01  0.304717  0.357674 -0...     A       0
-499  2025-09-07 -1.495061 -1.379120 -1.181479  ...     A     A        A       0
-
-[500 rows x 12 columns]
-
-    def test_all_artefacts_present(synthetic_df: pd.DataFrame):
-        """Garantir que todas as heurísticas retornem dict com chaves mínimas."""
-        funcs: Tuple = (iv, variance, ks_separation)
-        if NETWORKX_AVAILABLE:
-            funcs += (graph_cut, partial_corr_cluster)
-        for fn in funcs:
->           res = fn(
-                synthetic_df,
-                **({"target_col": "target"} if "target_col" in fn.__code__.co_varnames else {}),
-            )
-
-vassoura/tests/test_heuristics.py:207: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-vassoura/heuristics.py:888: in partial_corr_cluster
-    corr = df.corr(method=method)
-/root/.pyenv/versions/3.11.12/lib/python3.11/site-packages/pandas/core/frame.py:11056: in corr
-    mat = data.to_numpy(dtype=float, na_value=np.nan, copy=False)
-/root/.pyenv/versions/3.11.12/lib/python3.11/site-packages/pandas/core/frame.py:1998: in to_numpy
-    result = self._mgr.as_array(dtype=dtype, copy=copy, na_value=na_value)
-/root/.pyenv/versions/3.11.12/lib/python3.11/site-packages/pandas/core/internals/managers.py:1694: in as_array
-    arr = self._interleave(dtype=dtype, na_value=na_value)
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-
-self = BlockManager
-Items: Index(['date', 'x1', 'x2', 'x3', 'low_iv', 'low_ks', 'const_num', 'drift_var',
-       'cat1', 'cat...0, dtype: float64
-NumpyBlock: slice(11, 12, 1), 1 x 500, dtype: int64
-NumpyBlock: [ 0  8  9 10], 4 x 500, dtype: object
-dtype = dtype('float64'), na_value = nan
-
-    def _interleave(
-        self,
-        dtype: np.dtype | None = None,
-        na_value: object = lib.no_default,
-    ) -> np.ndarray:
-        """
-        Return ndarray from blocks with specified item order
-        Items must be contained in the blocks
-        """
-        if not dtype:
-            # Incompatible types in assignment (expression has type
-            # "Optional[Union[dtype[Any], ExtensionDtype]]", variable has
-            # type "Optional[dtype[Any]]")
-            dtype = interleaved_dtype(  # type: ignore[assignment]
-                [blk.dtype for blk in self.blocks]
-            )
-    
-        # error: Argument 1 to "ensure_np_dtype" has incompatible type
-        # "Optional[dtype[Any]]"; expected "Union[dtype[Any], ExtensionDtype]"
-        dtype = ensure_np_dtype(dtype)  # type: ignore[arg-type]
-        result = np.empty(self.shape, dtype=dtype)
-    
-        itemmask = np.zeros(self.shape[0])
-    
-        if dtype == np.dtype("object") and na_value is lib.no_default:
-            # much more performant than using to_numpy below
-            for blk in self.blocks:
-                rl = blk.mgr_locs
-                arr = blk.get_values(dtype)
-                result[rl.indexer] = arr
-                itemmask[rl.indexer] = 1
-            return result
-    
-        for blk in self.blocks:
-            rl = blk.mgr_locs
-            if blk.is_extension:
-                # Avoid implicit conversion of extension blocks to object
-    
-                # error: Item "ndarray" of "Union[ndarray, ExtensionArray]" has no
-                # attribute "to_numpy"
-                arr = blk.values.to_numpy(  # type: ignore[union-attr]
-                    dtype=dtype,
-                    na_value=na_value,
-                )
-            else:
-                arr = blk.get_values(dtype)
->           result[rl.indexer] = arr
-E           ValueError: could not convert string to float: '2024-01-01'
-
-/root/.pyenv/versions/3.11.12/lib/python3.11/site-packages/pandas/core/internals/managers.py:1753: ValueError
-=========================== short test summary info ============================
-FAILED vassoura/tests/test_heuristics.py::test_psi_stability_detects_drift - ...
-FAILED vassoura/tests/test_heuristics.py::test_all_artefacts_present - ValueE...
-2 failed, 5 passed in 6.26s
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 7 passed, 2 warnings in 3.01s ========================

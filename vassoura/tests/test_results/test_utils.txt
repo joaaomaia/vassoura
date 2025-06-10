@@ -1,0 +1,20 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.16, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\JM\AppData\Local\anaconda3\envs\ENV_STONE\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura
+configfile: pyproject.toml
+plugins: anyio-4.9.0
+collecting ... collected 4 items
+
+vassoura/tests/test_utils.py::test_suggest_corr_method PASSED            [ 25%]
+vassoura/tests/test_utils.py::test_figsize_from_matrix_bounds PASSED     [ 50%]
+vassoura/tests/test_utils.py::test_criar_dataset_pd_behavior_columns PASSED [ 75%]
+vassoura/tests/test_utils.py::test_adaptive_sampling_stratify_and_order PASSED [100%]
+
+============================== warnings summary ===============================
+vassoura/tests/test_utils.py::test_adaptive_sampling_stratify_and_order
+  C:\Users\JM\Documents\0_CienciaDados\1_Frameworks\Vassoura\vassoura\utils.py:144: DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+    .apply(lambda x: x.sample(frac=frac, random_state=random_state))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 4 passed, 1 warning in 2.17s =========================
