@@ -723,8 +723,13 @@ def psi_stability(
         s2 = df_oot[col]
         if s1.dtype.kind in "bifc" and s1.nunique() > 1:
             try:
-                b1 = pd.qcut(s1, q=bins, duplicates="drop")
-                b2 = pd.qcut(s2, q=bins, duplicates="drop")
+                # bin edges calculados sobre a distribuicao completa para
+                # evitar misalignment das janelas
+                _, bin_edges = pd.qcut(
+                    pd.concat([s1, s2]), q=bins, duplicates="drop", retbins=True
+                )
+                b1 = pd.cut(s1, bins=bin_edges, include_lowest=True)
+                b2 = pd.cut(s2, bins=bin_edges, include_lowest=True)
             except ValueError:
                 continue
         else:
@@ -885,7 +890,8 @@ def partial_corr_cluster(
         return {"removed": [], "artefacts": None, "meta": {}}
 
     keep_cols = set(keep_cols or [])
-    corr = df.corr(method=method)
+    df = df.select_dtypes(include=[np.number])
+    corr = df.corr(method=method).fillna(0)
     prec = np.linalg.pinv(corr)
     pcorr = -prec / np.sqrt(np.outer(np.diag(prec), np.diag(prec)))
     np.fill_diagonal(pcorr, 1)
