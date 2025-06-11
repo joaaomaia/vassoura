@@ -32,7 +32,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
     ) -> None:
         self.strategy = strategy
         self.preferred = preferred
-        self.exclude_cols = exclude_cols or []
+        self.exclude_cols = exclude_cols if exclude_cols is not None else []
         self.n_quantiles = n_quantiles
         self.output_distribution = output_distribution
         self.verbose = verbose

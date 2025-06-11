@@ -129,16 +129,20 @@ class SampleManager(BaseEstimator, TransformerMixin):
 
     def transform(
         self, X: pd.DataFrame, y: Iterable | None = None
-    ) -> pd.DataFrame | tuple[pd.DataFrame, Iterable]:
-        X_res, y_res = self._apply_sampling(X, y)
-        if y is not None:
-            return X_res, y_res
+    ) -> pd.DataFrame:
+        X_res, _ = self._apply_sampling(X, y)
         return X_res
+
+    def fit_transform(
+        self, X: pd.DataFrame, y: Iterable | None = None
+    ) -> pd.DataFrame:
+        return self.fit(X, y).transform(X, y)
 
     def fit_resample(
         self, X: pd.DataFrame, y: Iterable
     ) -> tuple[pd.DataFrame, Iterable]:
-        return self.fit(X, y).transform(X, y)
+        self.fit(X, y)
+        return self._apply_sampling(X, y)
 
     def get_support_mask(self) -> np.ndarray:
         if self.mask_.size == 0:
