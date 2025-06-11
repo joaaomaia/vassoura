@@ -61,3 +61,12 @@ model.fit(X_train, y_train)
 
 All wrappers automatically handle class imbalance using `sample_weight` when
 supported by the underlying library.
+
+## Importance heuristics
+
+```python
+from vassoura.process import basic_importance
+
+imp = basic_importance(X_train, y_train, model="logistic", method="coef")
+print(imp.head())
+```
