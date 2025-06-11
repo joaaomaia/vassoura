@@ -47,6 +47,10 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         Logger customizado; se None, usa ``vassoura.scaler``.
     log_level : int | None
         Nível de log a ser aplicado ao logger.
+    verbose : {'off', 'basic', 'debug'}
+        Controla o nível de mensagens impressas durante ``fit`` e ``transform``.
+        ``"off"`` desativa logs, ``"basic"`` mostra progresso e ``"debug"``
+        detalha coluna a coluna.
     enable_scaler : bool
         Se False, ``transform`` devolve o DataFrame inalterado.
     """
@@ -62,7 +66,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         save_path: str | pathlib.Path | None = None,
         random_state: int = 0,
         *,
-        verbose: str = "none",
+        verbose: str = "off",
         log_level: int | None = None,
         logger: logging.Logger | None = None,
         enable_scaler: bool = True,
@@ -235,6 +239,14 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         self.fitted_ = True
         self._fitted = True
         if self.verbose in ("basic", "debug"):
+            applied = {
+                col: (scaler.__class__.__name__ if scaler else "None")
+                for col, scaler in self.scalers_.items()
+            }
+            self.logger.info(
+                "[DynamicScaler] %s",
+                pd.Series(applied).value_counts().to_dict(),
+            )
             elapsed = time.time() - start_time
             self.logger.info("[DynamicScaler] fit completed in %.2fs", elapsed)
         return self
