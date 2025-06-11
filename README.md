@@ -20,3 +20,18 @@ scaler = DynamicScaler(strategy="auto")
 X_scaled = scaler.fit_transform(X_sampled)
 ```
 
+
+### Example – Quick modelling
+
+```python
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from vassoura.preprocessing import make_default_pipeline
+
+pipeline = make_default_pipeline()
+model = Pipeline([
+    ("prep", pipeline),
+    ("clf", LogisticRegression())
+])
+model.fit(X, y)
+```
