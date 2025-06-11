@@ -35,3 +35,13 @@ model = Pipeline([
 ])
 model.fit(X, y)
 ```
+
+### Cross-validation
+
+```python
+from vassoura.validation import get_stratified_cv
+from vassoura.utils.metrics import SCORERS
+
+cv = get_stratified_cv(5)
+scores = cross_validate(pipe, X, y, cv=cv, scoring=SCORERS)
+```
