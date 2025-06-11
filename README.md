@@ -1,4 +1,5 @@
 # Vassoura
+[![CI](https://github.com/example/vassoura/actions/workflows/python-ci.yml/badge.svg)](https://github.com/example/vassoura/actions/workflows/python-ci.yml) [![codecov](https://codecov.io/gh/example/vassoura/branch/main/graph/badge.svg)](https://codecov.io/gh/example/vassoura) [![PyPI](https://img.shields.io/pypi/v/vassoura.svg)](https://pypi.org/project/vassoura/)
 Vassoura é um framework para seleção e auditoria de variáveis...
 
 ## Quick start
@@ -104,3 +105,12 @@ rm.add_section(
 )
 rm.render("report.html")
 ```
+
+## Contributing
+Run the following once to enable pre-commit hooks:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
