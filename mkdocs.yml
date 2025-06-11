@@ -1,0 +1,14 @@
+site_name: Vassoura
+repo_url: https://github.com/example/vassoura
+theme:
+  name: material
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - API Reference: api.md
+  - Examples:
+      - Quickstart Notebook: examples/quickstart.ipynb

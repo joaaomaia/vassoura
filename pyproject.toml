@@ -14,3 +14,25 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "hypothesis",
+    "pre-commit",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mike",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
