@@ -43,20 +43,16 @@ class SampleManager(BaseEstimator, TransformerMixin):
         if self.strategy in {"time_series", "stratified"}:
             return True
         # auto strategy
-        mem_mb = X.memory_usage(deep=True).sum() / 2 ** 20
+        mem_mb = X.memory_usage(deep=True).sum() / 2**20
         row_cap = self.limit_mb * 25
         return mem_mb > self.limit_mb or len(X) > row_cap
 
-    def fit(
-        self, X: pd.DataFrame, y: Iterable | None = None
-    ) -> "SampleManager":
+    def fit(self, X: pd.DataFrame, y: Iterable | None = None) -> "SampleManager":
         if self.strategy == "stratified" and y is None:
             raise ValueError("y is required for stratified sampling")
         if self.strategy == "time_series":
             if self.time_col is None or self.time_col not in X.columns:
-                raise ValueError(
-                    "time_col must be provided for time_series strategy"
-                )
+                raise ValueError("time_col must be provided for time_series strategy")
         if self.strategy not in {"auto", "stratified", "time_series", "none"}:
             raise ValueError(f"Unknown strategy '{self.strategy}'")
 
@@ -70,7 +66,7 @@ class SampleManager(BaseEstimator, TransformerMixin):
         original_rows = len(X)
         sampled_rows = self.sample_size_ if self._do_sample else original_rows
         if self.verbose >= 2:
-            mem_before = X.memory_usage(deep=True).sum() / 2 ** 20
+            mem_before = X.memory_usage(deep=True).sum() / 2**20
             mem_after = mem_before * (self.frac if self._do_sample else 1)
             self.logger.debug(
                 "memory before=%.2fMB after=%.2fMB", mem_before, mem_after
@@ -111,9 +107,7 @@ class SampleManager(BaseEstimator, TransformerMixin):
             mask = np.zeros(len(X), dtype=bool)
             mask[train_idx] = True
         else:
-            idx = X.sample(
-                frac=self.frac, random_state=self.random_state
-            ).index
+            idx = X.sample(frac=self.frac, random_state=self.random_state).index
             mask = X.index.isin(idx)
 
         self.mask_ = mask
@@ -127,22 +121,20 @@ class SampleManager(BaseEstimator, TransformerMixin):
             return X_res, y_res
         return X_res, None
 
-    def transform(
-        self, X: pd.DataFrame, y: Iterable | None = None
-    ) -> pd.DataFrame:
+    def transform(self, X: pd.DataFrame, y: Iterable | None = None) -> pd.DataFrame:
         X_res, _ = self._apply_sampling(X, y)
         return X_res
 
-    def fit_transform(
-        self, X: pd.DataFrame, y: Iterable | None = None
-    ) -> pd.DataFrame:
+    def fit_transform(self, X: pd.DataFrame, y: Iterable | None = None) -> pd.DataFrame:
         return self.fit(X, y).transform(X, y)
 
     def fit_resample(
         self, X: pd.DataFrame, y: Iterable
     ) -> tuple[pd.DataFrame, Iterable]:
         self.fit(X, y)
-        return self._apply_sampling(X, y)
+        X_res, y_res = self._apply_sampling(X, y)
+        assert y_res is not None
+        return X_res, y_res
 
     def get_support_mask(self) -> np.ndarray:
         if self.mask_.size == 0:

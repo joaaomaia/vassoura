@@ -14,7 +14,11 @@ def _discover() -> None:
     for _, name, _ in pkgutil.iter_modules([str(pkg)]):
         if name in {"__init__", "base", "registry", "utils"}:
             continue
-        module = import_module(f"vassoura.models.{name}")
+        try:
+            module = import_module(f"vassoura.models.{name}")
+        except ModuleNotFoundError:
+            # Optional dependency missing – silently skip
+            continue
         for attr in dir(module):
             obj = getattr(module, attr)
             if (

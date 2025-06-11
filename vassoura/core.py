@@ -11,6 +11,8 @@ from vassoura.models import registry
 from vassoura.utils import SCORERS, split_dtypes, calculate_sample_weights
 from vassoura.validation import get_stratified_cv
 from vassoura.process.wrappers import import_heuristic
+from vassoura.audit import AuditTrail
+from vassoura.report import ReportManager, SECTION_REGISTRY
 
 
 class Vassoura:
@@ -48,6 +50,11 @@ class Vassoura:
         X = df.drop(columns=[self.target_col])
         y = df[self.target_col]
 
+        if self.report:
+            self.audit_ = AuditTrail(auto_detect_types=True)
+            self.audit_.take_snapshot(df, "raw")
+            self.dataset_shape_ = df.shape
+
         # Sampling
         self.sampler_ = SampleManager(**self.sampler_cfg)
         X_s, y_s = self.sampler_.fit_resample(X, y)
@@ -55,9 +62,7 @@ class Vassoura:
         # Pipeline
         num_cols, cat_cols = split_dtypes(X_s)
         pipe_args = {
-            "scaler_strategy": self.pipeline_cfg.get(
-                "scaler_strategy", "auto"
-            ),
+            "scaler_strategy": self.pipeline_cfg.get("scaler_strategy", "auto"),
             "encoder": self.pipeline_cfg.get("encoder", "woe"),
         }
         self.pipeline_ = make_default_pipeline(num_cols, cat_cols, **pipe_args)
@@ -66,9 +71,7 @@ class Vassoura:
         ModelCls = registry.get(self.model_name)
         self.model_ = ModelCls(random_state=self.random_state)
         sample_weights = calculate_sample_weights(y_s)
-        self.logger.debug(
-            "Using sample weights – mean: %.3f", sample_weights.mean()
-        )
+        self.logger.debug("Using sample weights – mean: %.3f", sample_weights.mean())
 
         cv = get_stratified_cv(**self.cv_cfg)
         scoring = {m: SCORERS[m] for m in self.metrics}
@@ -119,11 +122,13 @@ class Vassoura:
         # Importance heuristic
         HeurCls = import_heuristic(self.heuristic)
         self.heuristic_ = HeurCls(model=self.model_)
-        self.ranking_ = self.heuristic_.run(
-            X_s, y_s, sample_weight=sample_weights
-        )
+        self.ranking_ = self.heuristic_.run(X_s, y_s, sample_weight=sample_weights)
 
         if self.report:
+            df_proc = X_s.copy()
+            df_proc[self.target_col] = y_s
+            self.audit_.take_snapshot(df_proc, "processed")
+            self.audit_.compare_snapshots("raw", "processed")
             self.export_report()
 
         self.logger.info("=== Vassoura Fit Completed ===")
@@ -144,7 +149,27 @@ class Vassoura:
 
     # ------------------------------------------------------------------
     def export_report(self, path: str = "reports/report.html") -> None:
-        self.logger.warning("Report generation not implemented")
+        rm = ReportManager()
+        rm.add_section(
+            SECTION_REGISTRY["overview"](
+                audit=self.audit_,
+                snapshot_names=list(self.audit_.snapshots.keys()),
+                dataset_shape=self.dataset_shape_,
+            )
+        )
+        metrics_df = pd.DataFrame(self.metrics_)
+        rm.add_section(SECTION_REGISTRY["performance"](metrics=metrics_df))
+        rm.add_section(
+            SECTION_REGISTRY["feature_importance"](
+                importance=self.get_feature_ranking()
+            )
+        )
+        rm.add_section(
+            SECTION_REGISTRY["audit_diff"](
+                audit=self.audit_, base="raw", new="processed"
+            )
+        )
+        rm.render(path)
 
     # ------------------------------------------------------------------
     def save(self, path: str = "models/vassoura.pkl") -> None:
