@@ -80,3 +80,27 @@ from vassoura.process import basic_importance
 imp = basic_importance(X_train, y_train, model="logistic", method="coef")
 print(imp.head())
 ```
+
+## Audit & Reports
+
+```python
+from vassoura import Vassoura, AuditTrail
+from vassoura.report import ReportManager, SECTION_REGISTRY
+
+df = pd.DataFrame({"a": [1, 2, 3], "target": [0, 1, 0]})
+audit = AuditTrail(auto_detect_types=True)
+audit.take_snapshot(df, "raw")
+
+v = Vassoura(target_col="target", report=True)
+v.fit(df)
+
+rm = ReportManager()
+rm.add_section(
+    SECTION_REGISTRY["overview"](
+        audit=audit,
+        snapshot_names=list(audit.snapshots.keys()),
+        dataset_shape=df.shape,
+    )
+)
+rm.render("report.html")
+```

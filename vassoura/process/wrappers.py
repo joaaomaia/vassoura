@@ -5,7 +5,16 @@ import numpy as np
 
 from .basic import basic_importance
 from .medium import medium_importance
-from .advanced import advanced_importance
+
+from typing import Callable, Optional  # noqa: F401
+
+advanced_importance: Optional[Callable]
+try:
+    from .advanced import advanced_importance as _advanced_importance
+
+    advanced_importance = _advanced_importance
+except Exception:  # optional dependency "shap"
+    advanced_importance = None
 
 
 class BasicHeuristic:
@@ -69,6 +78,8 @@ class AdvancedHeuristic:
         sample_weight: np.ndarray | None = None,
         random_state: int | None = 42,
     ) -> pd.Series:
+        if advanced_importance is None:
+            raise ImportError("advanced_importance requires 'shap' installed")
         return advanced_importance(
             X,
             y,
