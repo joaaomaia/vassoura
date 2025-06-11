@@ -1,7 +1,10 @@
-import logging, sys
+import logging
+import sys
 
 
-def get_logger(name: str = "vassoura", level: int = logging.INFO) -> logging.Logger:
+def get_logger(
+    name: str = "vassoura", level: int = logging.INFO
+) -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)

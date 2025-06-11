@@ -45,3 +45,19 @@ from vassoura.utils.metrics import SCORERS
 cv = get_stratified_cv(5)
 scores = cross_validate(pipe, X, y, cv=cv, scoring=SCORERS)
 ```
+
+## Model Zoo
+
+Ready-to-use wrappers are available via `vassoura.models` registry:
+
+```python
+from vassoura.models import get, list_models
+
+print(list_models())  # ['logistic_balanced', ...]
+Model = get('logistic_balanced')
+model = Model()
+model.fit(X_train, y_train)
+```
+
+All wrappers automatically handle class imbalance using `sample_weight` when
+supported by the underlying library.
