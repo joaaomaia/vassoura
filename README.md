@@ -20,6 +20,16 @@ scaler = DynamicScaler(strategy="auto")
 X_scaled = scaler.fit_transform(X_sampled)
 ```
 
+### Training with Vassoura
+
+```python
+from vassoura import Vassoura
+
+v = Vassoura(target_col="target")
+v.fit(df)
+preds = v.predict(df)
+```
+
 
 ### Example – Quick modelling
 
