@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import numpy as np
 
 from vassoura.validation import get_stratified_cv, get_time_series_cv
 from vassoura.validation.cv import train_test_split_by_date
