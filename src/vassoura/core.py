@@ -1,28 +1,30 @@
 from __future__ import annotations
 
+import inspect
+
 import joblib
 import pandas as pd
-from sklearn.model_selection import cross_validate
-import inspect
 import sklearn
+from sklearn.model_selection import cross_validate
 from sklearn.pipeline import Pipeline
 
 
 def _supports_sample_weight(estimator) -> bool:
     """Return True if `estimator.fit` has a `sample_weight` param."""
     try:
-        return 'sample_weight' in inspect.signature(estimator.fit).parameters
+        return "sample_weight" in inspect.signature(estimator.fit).parameters
     except (AttributeError, ValueError):
         return False
 
-from vassoura.logs import get_logger
-from vassoura.preprocessing import SampleManager, make_default_pipeline
-from vassoura.models import registry
-from vassoura.utils import SCORERS, split_dtypes, calculate_sample_weights
-from vassoura.validation import get_stratified_cv
-from vassoura.process.wrappers import import_heuristic
+
 from vassoura.audit import AuditTrail
-from vassoura.report import ReportManager, SECTION_REGISTRY
+from vassoura.logs import get_logger
+from vassoura.models import registry
+from vassoura.preprocessing import SampleManager, make_default_pipeline
+from vassoura.process.wrappers import import_heuristic
+from vassoura.report import SECTION_REGISTRY, ReportManager
+from vassoura.utils import SCORERS, calculate_sample_weights, split_dtypes
+from vassoura.validation import get_stratified_cv
 
 
 class Vassoura:
@@ -84,6 +86,11 @@ class Vassoura:
         self.logger.debug("Using sample weights – mean: %.3f", sample_weights.mean())
 
         cv = get_stratified_cv(**self.cv_cfg)
+        needs_proba = {"auc", "brier", "logloss"}
+        if not hasattr(self.model_, "predict_proba"):
+            self.metrics = [m for m in self.metrics if m not in needs_proba]
+            if not self.metrics:
+                self.metrics = ["accuracy"]
         scoring = {m: SCORERS[m] for m in self.metrics}
 
         pipeline = Pipeline([("prep", self.pipeline_), ("clf", self.model_)])
