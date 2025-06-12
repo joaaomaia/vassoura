@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Protocol, Dict, Type, Any
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Protocol, Type
 
 import pandas as pd
 import plotly.express as px
@@ -36,6 +36,10 @@ class OverviewSection:
     audit: AuditTrail
     snapshot_names: list[str]
     dataset_shape: tuple[int, int]
+    id_cols: list[str] | None = None
+    date_cols: list[str] | None = None
+    ignore_cols: list[str] | None = None
+    keep_cols: list[str] | None = None
 
     name: str = "overview"
 
@@ -46,6 +50,10 @@ class OverviewSection:
         html += f"<p>Date: {date}</p>"
         html += f"<p>Dataset shape: {self.dataset_shape}</p>"
         html += f"<p>Snapshots: {snapshots}</p>"
+        html += f"<p>ID columns: {', '.join(self.id_cols or [])}</p>"
+        html += f"<p>Date columns: {', '.join(self.date_cols or [])}</p>"
+        html += f"<p>Ignored columns: {', '.join(self.ignore_cols or [])}</p>"
+        html += f"<p>Keep columns: {', '.join(self.keep_cols or [])}</p>"
         return html
 
 
