@@ -4,7 +4,7 @@ version = "0.0.1a0"
 description = "Unified feature-selection & reporting framework"
 requires-python = ">=3.9"
 authors = [{name = "Seu Nome", email = "you@example.com"}]
-license = {text = "MIT"}
+license = "MIT"            # era table → agora string SPDX
 dependencies = [
     "pandas>=1.5",
     "numpy>=1.22",
@@ -14,6 +14,15 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# lista explícita ou padrões de inclusão/exclusão
+packages = ["vassoura"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vassoura*"]
+exclude = ["legacy*", "test_results*"]
 
 [project.optional-dependencies]
 dev = [

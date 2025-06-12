@@ -6,3 +6,77 @@ __pycache__/
 dist/
 build/
 .env
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testes e relatórios de cobertura
+htmlcov/
+.tox/
+.coverage
+.cache/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Notebooks temporários
+*.ipynb_checkpoints
+
+# Ambientes virtuais
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Docs (build local)
+site/
+docs/_build/
+imgs/olds
+bin/
+
+#test_results/
+#run_tests.sh
+
+# Relatórios gerados
+#vassoura_report.html
+*.svg
+*.pdf
+*.html
+
+# Ignora todos os arquivos .png
+*.png
+# Arquivos de design
+*.psd
+
+# Exceto o banner específico
+!vassoura/imgs/social_preview_github.png
+
+# Dados temporários
+*.log
+*.tmp
+*.bak
+
+# Ignore notebook de saída se necessário
+examples/*.out.ipynb
+notes.txt
+
+generate_diagram.py
+estrutura_projeto.txt
