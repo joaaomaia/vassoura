@@ -3,8 +3,8 @@ name = "vassoura"
 version = "0.0.1a0"
 description = "Unified feature-selection & reporting framework"
 requires-python = ">=3.9"
-authors = [{name = "Seu Nome", email = "you@example.com"}]
-license = "MIT"            # era table → agora string SPDX
+authors = [{name = "João Maia", email = "maia.ufrrj@gmail.com"}]
+license = "MIT"
 dependencies = [
     "pandas>=1.5",
     "numpy>=1.22",
@@ -16,11 +16,10 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-# lista explícita ou padrões de inclusão/exclusão
-packages = ["vassoura"]
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["vassoura*"]
 exclude = ["legacy*", "test_results*"]
 
