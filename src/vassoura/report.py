@@ -164,5 +164,5 @@ class ReportManager:
         final_html = f"<html><head><link rel='stylesheet' href='{css}'></head><body>{toc}{body}</body></html>"
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(final_html, encoding="utf8")
+        path.write_text(final_html, encoding="utf-8")
         return path

@@ -68,6 +68,8 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
         sample = x.dropna().astype(float)
         if sample.empty:
             return None
+        if sample.std(ddof=0) == 0:
+            return None
         var = sample.var()
         sk = skew(sample, nan_policy="omit")
         kt = kurtosis(sample, nan_policy="omit")
@@ -128,7 +130,7 @@ class DynamicScaler(BaseEstimator, TransformerMixin):
             scaler = None
             if col in self.exclude_cols:
                 reason = "excluded"
-            elif col.startswith("woe_"):
+            elif str(col).startswith("woe_"):
                 reason = "woe"
             elif series.isna().all():
                 reason = "all_nan"

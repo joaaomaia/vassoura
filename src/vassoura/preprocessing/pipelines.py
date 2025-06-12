@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 
 from .scaler import DynamicScaler
 from .encoders import WOEGuard, OneHotLite, OrdinalSafe
@@ -32,6 +33,7 @@ def make_default_pipeline(
         cat_sel = cat_cols
 
     num_pipe = Pipeline([
+        ("impute", SimpleImputer(strategy="median")),
         ("scaler", DynamicScaler(strategy=scaler_strategy)),
     ])
 
