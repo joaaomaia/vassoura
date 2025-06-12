@@ -3,7 +3,17 @@ from __future__ import annotations
 import joblib
 import pandas as pd
 from sklearn.model_selection import cross_validate
+import inspect
+import sklearn
 from sklearn.pipeline import Pipeline
+
+
+def _supports_sample_weight(estimator) -> bool:
+    """Return True if `estimator.fit` has a `sample_weight` param."""
+    try:
+        return 'sample_weight' in inspect.signature(estimator.fit).parameters
+    except (AttributeError, ValueError):
+        return False
 
 from vassoura.logs import get_logger
 from vassoura.preprocessing import SampleManager, make_default_pipeline
@@ -77,18 +87,12 @@ class Vassoura:
         scoring = {m: SCORERS[m] for m in self.metrics}
 
         pipeline = Pipeline([("prep", self.pipeline_), ("clf", self.model_)])
-        try:
-            self.metrics_ = cross_validate(
-                pipeline,
-                X_s,
-                y_s,
-                cv=cv,
-                fit_params={"clf__sample_weight": sample_weights},
-                scoring=scoring,
-                return_train_score=False,
-            )
-            self._used_sample_weight = True
-        except TypeError:
+        fit_params = (
+            {"clf__sample_weight": sample_weights}
+            if _supports_sample_weight(self.model_)
+            else {}
+        )
+        if not fit_params:
             self.logger.info(
                 "Sample weights not supported – falling back to class_weight"
             )
@@ -96,22 +100,28 @@ class Vassoura:
                 self.model_.get_params()
             ):
                 self.model_.set_params(class_weight="balanced")
-            self.metrics_ = cross_validate(
-                pipeline,
-                X_s,
-                y_s,
-                cv=cv,
-                scoring=scoring,
-                return_train_score=False,
-            )
-            self._used_sample_weight = False
+
+        cv_kwargs = {
+            "cv": cv,
+            "scoring": scoring,
+            "return_train_score": False,
+        }
+        if "params" in inspect.signature(cross_validate).parameters:
+            if fit_params:
+                cv_kwargs["params"] = fit_params
+        else:
+            if fit_params:
+                cv_kwargs["fit_params"] = fit_params
+
+        self.metrics_ = cross_validate(pipeline, X_s, y_s, **cv_kwargs)
+        self._used_sample_weight = bool(fit_params)
 
         # Fit final pipeline and model on full data
         self.pipeline_.fit(X_s, y_s)
         Xt_all = self.pipeline_.transform(X_s)
-        try:
+        if _supports_sample_weight(self.model_):
             self.model_.fit(Xt_all, y_s, sample_weight=sample_weights)
-        except TypeError:
+        else:
             if (
                 hasattr(self.model_, "get_params")
                 and "class_weight" in self.model_.get_params()
