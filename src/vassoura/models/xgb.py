@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import xgboost as xgb
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 from vassoura.logs import get_logger
 
@@ -8,10 +9,11 @@ from .base import WrapperBase
 from .utils import make_sample_weights, supports_sample_weight
 
 
-class XGBoostWrapper(WrapperBase):
+class XGBoostWrapper(WrapperBase, BaseEstimator, ClassifierMixin):
     """XGBoost classifier wrapper with balanced weights."""
 
     name = "xgboost_balanced"
+    _estimator_type = "classifier"
 
     def __init__(self, **params) -> None:
         defaults = dict(

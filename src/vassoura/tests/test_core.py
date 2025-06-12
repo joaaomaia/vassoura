@@ -8,11 +8,13 @@ from vassoura import Vassoura
 
 
 def _make_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        "num": range(10),
-        "cat": ["a", "b"] * 5,
-        "target": [0, 1] * 5,
-    })
+    return pd.DataFrame(
+        {
+            "num": range(10),
+            "cat": ["a", "b"] * 5,
+            "target": [0, 1] * 5,
+        }
+    )
 
 
 def test_fit_runs_end_to_end_small_df():
@@ -75,3 +77,24 @@ def test_sample_weight_fallback(monkeypatch, caplog):
         v.fit(df)
     msgs = [r.message for r in caplog.records]
     assert any("falling back" in m for m in msgs)
+
+
+def test_datetime_column_handled():
+    df = _make_df()
+    df["date"] = pd.date_range("2021-01-01", periods=len(df))
+    v = Vassoura(
+        target_col="target",
+        date_cols=["date"],
+        random_state=0,
+        verbose=0,
+    )
+    v.fit(df)
+    assert hasattr(v, "model_")
+
+
+def test_keep_cols_in_ranking():
+    df = _make_df()
+    v = Vassoura(target_col="target", keep_cols=["cat"], random_state=0, verbose=0)
+    v.fit(df)
+    ranking = v.get_feature_ranking()
+    assert "cat" in ranking.index

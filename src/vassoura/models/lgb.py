@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import lightgbm as lgb
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 from vassoura.logs import get_logger
 
@@ -8,10 +9,11 @@ from .base import WrapperBase
 from .utils import make_sample_weights, supports_sample_weight
 
 
-class LightGBMWrapper(WrapperBase):
+class LightGBMWrapper(WrapperBase, BaseEstimator, ClassifierMixin):
     """LightGBM classifier wrapper with balanced weights."""
 
     name = "lightgbm_balanced"
+    _estimator_type = "classifier"
 
     def __init__(self, **params) -> None:
         defaults = dict(

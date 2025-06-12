@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-
 from sklearn.linear_model import LogisticRegression
 
 from vassoura.models import get, list_models
@@ -58,6 +57,7 @@ def test_class_weight_fallback(monkeypatch):
 
         def fit(self, X, y):
             self.fitted = True
+
     from vassoura.models.lr import LogisticRegressionWrapper
 
     wrapper = LogisticRegressionWrapper()
@@ -72,3 +72,14 @@ def test_registry_lookup():
     from vassoura.models.lr import LogisticRegressionWrapper
 
     assert Model is LogisticRegressionWrapper
+
+
+def test_wrappers_classifier_flag():
+    for name in list_models():
+        Model = get(name)
+        if "xgboost" in name:
+            pytest.importorskip("xgboost")
+        if "lightgbm" in name:
+            pytest.importorskip("lightgbm")
+        est = Model()
+        assert getattr(est, "_estimator_type", None) == "classifier"

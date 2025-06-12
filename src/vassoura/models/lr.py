@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.linear_model import LogisticRegression
 
 from vassoura.logs import get_logger
@@ -8,10 +9,11 @@ from .base import WrapperBase
 from .utils import make_sample_weights, supports_sample_weight
 
 
-class LogisticRegressionWrapper(WrapperBase):
+class LogisticRegressionWrapper(WrapperBase, BaseEstimator, ClassifierMixin):
     """Logistic Regression with balanced sampling."""
 
     name = "logistic_balanced"
+    _estimator_type = "classifier"
 
     def __init__(self, **params) -> None:
         defaults = dict(

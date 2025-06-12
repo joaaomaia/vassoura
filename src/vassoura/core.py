@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 
 import joblib
+import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.model_selection import cross_validate
@@ -15,6 +16,10 @@ def _supports_sample_weight(estimator) -> bool:
         return "sample_weight" in inspect.signature(estimator.fit).parameters
     except (AttributeError, ValueError):
         return False
+
+
+def _is_classifier(est) -> bool:
+    return getattr(est, "_estimator_type", None) == "classifier"
 
 
 from vassoura.audit import AuditTrail
@@ -41,6 +46,11 @@ class Vassoura:
         report: bool = False,
         random_state: int | None = 42,
         verbose: int = 1,
+        id_cols: list[str] | None = None,
+        date_cols: list[str] | None = None,
+        ignore_cols: list[str] | None = None,
+        keep_cols: list[str] | None = None,
+        drop_ignored: bool = True,
     ) -> None:
         self.target_col = target_col
         self.sampler_cfg = sampler_cfg or {}
@@ -52,6 +62,11 @@ class Vassoura:
         self.report = report
         self.random_state = random_state
         self.verbose = verbose
+        self.id_cols = id_cols or []
+        self.date_cols = date_cols or []
+        self.ignore_cols = ignore_cols or []
+        self.keep_cols = keep_cols or []
+        self.drop_ignored = drop_ignored
         self.logger = get_logger("Vassoura")
         if verbose >= 2:
             self.logger.setLevel("DEBUG")
@@ -59,6 +74,25 @@ class Vassoura:
     # ------------------------------------------------------------------
     def fit(self, df: pd.DataFrame) -> "Vassoura":
         self.logger.info("=== Vassoura Fit Started ===")
+        df = df.copy()
+
+        if self.ignore_cols:
+            self.ignored_ = df[self.ignore_cols]
+            if self.drop_ignored:
+                df = df.drop(columns=self.ignore_cols)
+        if self.id_cols:
+            self.ids_ = df[self.id_cols]
+            df = df.drop(columns=self.id_cols)
+
+        for c in self.date_cols:
+            if c not in df.columns:
+                continue
+            if not np.issubdtype(df[c].dtype, np.datetime64):
+                df[c] = pd.to_datetime(df[c], errors="coerce")
+            df[c] = (df[c].view("int64") // 86_400_000_000_000).astype("float64")
+
+        self.keep_cols_ = [c for c in self.keep_cols if c in df.columns]
+
         X = df.drop(columns=[self.target_col])
         y = df[self.target_col]
 
@@ -87,11 +121,13 @@ class Vassoura:
 
         cv = get_stratified_cv(**self.cv_cfg)
         needs_proba = {"auc", "brier", "logloss"}
-        if not hasattr(self.model_, "predict_proba"):
-            self.metrics = [m for m in self.metrics if m not in needs_proba]
-            if not self.metrics:
-                self.metrics = ["accuracy"]
-        scoring = {m: SCORERS[m] for m in self.metrics}
+        if not _is_classifier(self.model_):
+            self.metrics = [m for m in self.metrics if m in {"mse", "mae", "r2"}]
+        elif not hasattr(self.model_, "predict_proba"):
+            self.metrics = [m for m in self.metrics if m not in {"auc", "brier"}]
+        if not self.metrics:
+            self.metrics = ["accuracy"] if _is_classifier(self.model_) else ["r2"]
+        scoring = {m: SCORERS.get(m, m) for m in self.metrics}
 
         pipeline = Pipeline([("prep", self.pipeline_), ("clf", self.model_)])
         fit_params = (
@@ -140,6 +176,9 @@ class Vassoura:
         HeurCls = import_heuristic(self.heuristic)
         self.heuristic_ = HeurCls(model=self.model_)
         self.ranking_ = self.heuristic_.run(X_s, y_s, sample_weight=sample_weights)
+        self.ranking_ = self.ranking_.reindex(
+            self.ranking_.index.union(self.keep_cols_)
+        ).fillna(0)
 
         if self.report:
             df_proc = X_s.copy()
@@ -172,6 +211,10 @@ class Vassoura:
                 audit=self.audit_,
                 snapshot_names=list(self.audit_.snapshots.keys()),
                 dataset_shape=self.dataset_shape_,
+                id_cols=self.id_cols,
+                date_cols=self.date_cols,
+                ignore_cols=self.ignore_cols,
+                keep_cols=self.keep_cols,
             )
         )
         metrics_df = pd.DataFrame(self.metrics_)
