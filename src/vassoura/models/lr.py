@@ -43,5 +43,11 @@ class LogisticRegressionWrapper(WrapperBase):
         )
         return self
 
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)
+
+    def decision_function(self, X):
+        return self.model.decision_function(X)
+
     def predict(self, X):
-        return self.model.predict_proba(X)[:, 1]
+        return self.model.predict(X)

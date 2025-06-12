@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import pandas as pd
+from typing import Callable, Optional  # noqa: F401
+
 import numpy as np
+import pandas as pd
 
 from .basic import basic_importance
 from .medium import medium_importance
-
-from typing import Callable, Optional  # noqa: F401
 
 advanced_importance: Optional[Callable]
 try:
@@ -31,7 +31,23 @@ class BasicHeuristic:
         sample_weight: np.ndarray | None = None,
         random_state: int | None = 42,
     ) -> pd.Series:
-        X_enc = pd.get_dummies(X, drop_first=False)
+        high_card_limit = 50
+        cat_cols = X.select_dtypes("object").columns
+        safe_cols = [
+            c for c in cat_cols if X[c].nunique(dropna=False) <= high_card_limit
+        ]
+
+        from sklearn.preprocessing import OrdinalEncoder
+
+        oe = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+        X_ordinal = pd.DataFrame(
+            oe.fit_transform(X[safe_cols]),
+            columns=[f"ord_{c}" for c in safe_cols],
+            index=X.index,
+        )
+        X_num = X.drop(columns=cat_cols)
+        X_enc = pd.concat([X_num, X_ordinal], axis=1)
+
         return basic_importance(
             X_enc,
             y,

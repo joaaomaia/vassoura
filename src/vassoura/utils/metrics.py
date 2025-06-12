@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import pandas as pd
+from scipy.stats import ks_2samp
 from sklearn.metrics import (
-    roc_auc_score,
     average_precision_score,
-    f1_score,
-    matthews_corrcoef,
     brier_score_loss,
     classification_report,
+    f1_score,
     make_scorer,
+    matthews_corrcoef,
+    roc_auc_score,
 )
-from scipy.stats import ks_2samp
-
 
 __all__ = [
     "roc_auc_score_safe",
@@ -69,8 +68,6 @@ SCORERS = {
     "pr_auc": make_scorer(pr_auc_score_safe, needs_proba=True),
     "f1": make_scorer(f1_safe),
     "mcc": make_scorer(mcc_safe),
-    "brier": make_scorer(
-        brier_score, needs_proba=True, greater_is_better=False
-    ),
+    "brier": make_scorer(brier_score, needs_proba=True, greater_is_better=False),
     "ks": make_scorer(ks_statistic, needs_proba=True),
 }
