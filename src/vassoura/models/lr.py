@@ -37,6 +37,9 @@ class LogisticRegressionWrapper(WrapperBase, BaseEstimator, ClassifierMixin):
             if "class_weight" in self.model.get_params():
                 self.model.set_params(class_weight="balanced")
             self.model.fit(X, y)
+        # expose learned classes for sklearn compatibility
+        if hasattr(self.model, "classes_"):
+            self.classes_ = self.model.classes_
         self.logger.debug(
             "[ModelWrapper] model='%s' | params=%d | sample_weight=%s",
             self.name,

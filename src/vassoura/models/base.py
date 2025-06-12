@@ -33,3 +33,9 @@ class WrapperBase(ABC):
         if hasattr(self.model, "set_params"):
             self.model.set_params(**params)
         return self
+
+    def __getattr__(self, item):
+        """Delegate attribute access to the underlying model if possible."""
+        if item == "model":
+            raise AttributeError(item)
+        return getattr(self.model, item)
