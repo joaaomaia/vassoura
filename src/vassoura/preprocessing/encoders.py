@@ -12,7 +12,6 @@ from sklearn.preprocessing import OneHotEncoder
 
 from vassoura.logs import get_logger
 
-
 class WOEGuard(BaseEstimator, TransformerMixin):
     """Weight-of-Evidence encoder with safeguards for rare categories."""
 

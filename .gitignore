@@ -81,3 +81,5 @@ notes.txt
 generate_diagram.py
 estrutura_projeto.txt
 *_old*
+src/vassoura/tests/test_results
+src/vassoura/tests/run_tests.sh
